@@ -1,43 +1,83 @@
+template <typename T, size_t N>
+void MomentumBinsGraphs(T* (&hists)[N], const TString& pdfName, double fit_x_min, double fit_x_max)
+{
+    TCanvas *canvas = new TCanvas("canvas", "Canvas Title", 800, 600);
+    canvas->Print(pdfName + "[");
+
+    for (size_t i = 0; i < N; ++i)
+    {
+        double xMin = hists[i]->GetXaxis()->GetXmin();
+        double xMax = hists[i]->GetXaxis()->GetXmax();
+
+        TF1* fit = new TF1("fit", "gaus", fit_x_min, fit_x_max);
+        hists[i]->Fit(fit, "RQ");
+
+        fit->SetRange(xMin, xMax);
+
+        hists[i]->Draw();
+        fit->Draw("same");
+
+        gPad->Update();
+        double yTop = gPad->GetUymax();
+
+        if (fit) {
+            double mean  = fit->GetParameter(1);
+            double sigma = fit->GetParameter(2);
+            double left  = mean - 3.5 * sigma;
+            double right = mean + 3.5 * sigma;
+
+            TLine *l1 = new TLine(left, 0, left, yTop);
+            TLine *l2 = new TLine(right, 0, right, yTop);
+
+            l1->SetLineColor(kRed);
+            l2->SetLineColor(kRed);
+            l1->Draw();
+            l2->Draw();
+
+            TLegend* leg = new TLegend(0.6, 0.7, 0.88, 0.88);
+
+            leg->AddEntry((TObject*)0, Form("Mean = %.4f", mean), "");
+            leg->AddEntry((TObject*)0, Form("#sigma = %.4f", sigma), "");
+            leg->AddEntry((TObject*)0, Form("Mean - 3.5#sigma = %.4f", left), "");
+            leg->AddEntry((TObject*)0, Form("Mean + 3.5#sigma = %.4f", right), "");
+            leg->Draw();
+        }
+
+        canvas->Update();
+        canvas->Print(pdfName);
+    }
+
+    canvas->Print(pdfName + "]");
+    delete canvas;
+}
+
+void CreateDeltaTHists(TH1F* hists[], const TString& prefix)
+{
+    for (int i = 0; i < 20; ++i)
+    {
+        TString title = Form("%s #Deltat, p [%.2f, %.2f] GeV; #Deltat, ns",
+                             prefix.Data(), 0.25*i, 0.25*(i+1));
+
+        hists[i] = new TH1F(title, title, 100, -1, 1);
+    }
+}
+
 void delta_t_cut(void)
 {
+    gStyle->SetOptStat(0);
+    gStyle->SetOptFit(0);
 	gROOT->SetBatch(kTRUE); 
 
-	TH2F *p_delta_t_vs_p_FTOF = new TH2F("p_delta_t_FTOF", "FTOF proton p VS #Deltat; p, GeV; #Deltat, ns", 100, 0, 5, 100, -10, 10);
-    TH2F *p_delta_t_vs_p_CTOF = new TH2F("p_delta_t_CTOF", "CTOF proton p VS #Deltat; p, GeV; #Deltat, ns", 100, 0, 5, 100, -10, 10);
-    TH2F *pim_delta_t_vs_p_FTOF = new TH2F("pim_delta_t_FTOF", "FTOF #pi^{-} p VS #Deltat; p, GeV; #Deltat, ns", 100, 0, 5, 100, -8, 8);
-    TH2F *pim_delta_t_vs_p_CTOF = new TH2F("pim_delta_t_CTOF", "CTOF #pi^{-} p VS #Deltat; p, GeV; #Deltat, ns", 100, 0, 5, 100, -5, 5);
+	TH2F *p_delta_t_vs_p_FD = new TH2F("p_delta_t_FD", "FD proton p VS #Deltat; p, GeV; #Deltat, ns", 100, 0, 5, 100, -10, 10);
+    TH2F *p_delta_t_vs_p_CD = new TH2F("p_delta_t_CD", "CD proton p VS #Deltat; p, GeV; #Deltat, ns", 100, 0, 5, 100, -10, 10);
+    TH2F *pim_delta_t_vs_p_FD = new TH2F("pim_delta_t_FD", "FD #pi^{-} p VS #Deltat; p, GeV; #Deltat, ns", 100, 0, 5, 100, -8, 8);
+    TH2F *pim_delta_t_vs_p_CD = new TH2F("pim_delta_t_CD", "CD #pi^{-} p VS #Deltat; p, GeV; #Deltat, ns", 100, 0, 5, 100, -5, 5);
 
-    TH1F *p_delta_t_FTOF[20];
-	for(int i = 0; i < 20; ++i) 
-    {
-		char namehist[256];
-		sprintf(namehist, "FTOF proton #Deltat, p [%.2f, %.2f] GeV; #Deltat, ns", 0.25*i, 0.25*(i+1));
-		p_delta_t_FTOF[i] = new TH1F(namehist, namehist, 100, -1, 1);
-	}
-
-    TH1F *p_delta_t_CTOF[20];
-	for(int i = 0; i < 20; ++i) 
-    {
-		char namehist[256];
-		sprintf(namehist, "CTOF proton #Deltat, p [%.2f, %.2f] GeV; #Deltat, ns", 0.25*i, 0.25*(i+1));
-		p_delta_t_CTOF[i] = new TH1F(namehist, namehist, 100, -1, 1);
-	}
-
-    TH1F *pim_delta_t_FTOF[20];
-	for(int i = 0; i < 20; ++i) 
-    {
-		char namehist[256];
-		sprintf(namehist, "FTOF #pi^{-} #Deltat, p [%.2f, %.2f] GeV; #Deltat, ns", 0.25*i, 0.25*(i+1));
-		pim_delta_t_FTOF[i] = new TH1F(namehist, namehist, 100, -1, 1);
-	}
-
-    TH1F *pim_delta_t_CTOF[20];
-	for(int i = 0; i < 20; ++i) 
-    {
-		char namehist[256];
-		sprintf(namehist, "CTOF #pi^{-} #Deltat, p [%.2f, %.2f] GeV; #Deltat, ns", 0.25*i, 0.25*(i+1));
-		pim_delta_t_CTOF[i] = new TH1F(namehist, namehist, 100, -1, 1);
-	}
+    TH1F *p_delta_t_FD[20], *p_delta_t_CD[20], *pim_delta_t_FD[20], *pim_delta_t_CD[20];
+    CreateDeltaTHists(p_delta_t_FD,  "FD proton");
+    CreateDeltaTHists(p_delta_t_CD,  "CD proton");
+    CreateDeltaTHists(pim_delta_t_FD,"FD #pi^{-}");
+    CreateDeltaTHists(pim_delta_t_CD,"CD #pi^{-}");
 
 	TFile *infile_exp = TFile::Open("/home/stepan/root_progs/2pion_new/clas12/data/MPPT_events_clas12_selection_with_additional_values_saved.root"); // открываем рут файл с импульсами частиц
 
@@ -69,9 +109,13 @@ void delta_t_cut(void)
     TLorentzVector el_initial(0, 0, 6.535, 6.535);
 	TLorentzVector p_initial(0, 0, 0, 0.938);
 
+    int counter = 0;
 	/////////////////////////////////////////////////////////////////
 	while(reader.Next())
     {	      
+        counter++;
+        if (counter % 100000 == 0)  cout << counter / 100000 << "\n";
+
         el_final.SetXYZM(*px_e, *py_e, *pz_e, 0.);
         p_final.SetXYZM(*px_p, *py_p, *pz_p, 0.938);
         pi_minus.SetXYZM(*px_pim, *py_pim, *pz_pim, 0.139);
@@ -90,21 +134,21 @@ void delta_t_cut(void)
         double p_delta_t = *path_p / p_beta / c_light - *time_p + t_e;
         double pim_delta_t = *path_pim / pim_beta / c_light - *time_pim + t_e;
     	
-        if (2000 <= *status_p && *status_p < 4000) p_delta_t_vs_p_FTOF->Fill(p_mom, p_delta_t);
-        if (4000 <= *status_p && *status_p < 8000) p_delta_t_vs_p_CTOF->Fill(p_mom, p_delta_t);
+        if (2000 <= *status_p && *status_p < 4000) p_delta_t_vs_p_FD->Fill(p_mom, p_delta_t);
+        if (4000 <= *status_p && *status_p < 8000) p_delta_t_vs_p_CD->Fill(p_mom, p_delta_t);
 
-        if (2000 <= *status_pim && *status_pim < 4000) pim_delta_t_vs_p_FTOF->Fill(pim_mom, pim_delta_t);
-        if (4000 <= *status_pim && *status_pim < 8000) pim_delta_t_vs_p_CTOF->Fill(pim_mom, pim_delta_t);
+        if (2000 <= *status_pim && *status_pim < 4000) pim_delta_t_vs_p_FD->Fill(pim_mom, pim_delta_t);
+        if (4000 <= *status_pim && *status_pim < 8000) pim_delta_t_vs_p_CD->Fill(pim_mom, pim_delta_t);
 
         int p_bin = p_mom / 0.25;
         int pim_bin = pim_mom / 0.25;
         if (p_bin > 19) p_bin = 19;
         if (pim_bin > 19) pim_bin = 19;
 
-        if (2000 <= *status_p && *status_p < 4000) p_delta_t_FTOF[p_bin]->Fill(p_delta_t);
-        if (4000 <= *status_p && *status_p < 8000) p_delta_t_CTOF[p_bin]->Fill(p_delta_t);
-        if (2000 <= *status_p && *status_p < 4000) pim_delta_t_FTOF[p_bin]->Fill(pim_delta_t);
-        if (4000 <= *status_p && *status_p < 8000) pim_delta_t_CTOF[p_bin]->Fill(pim_delta_t);
+        if (2000 <= *status_p && *status_p < 4000) p_delta_t_FD[p_bin]->Fill(p_delta_t);
+        if (4000 <= *status_p && *status_p < 8000) p_delta_t_CD[p_bin]->Fill(p_delta_t);
+        if (2000 <= *status_p && *status_p < 4000) pim_delta_t_FD[p_bin]->Fill(pim_delta_t);
+        if (4000 <= *status_p && *status_p < 8000) pim_delta_t_CD[p_bin]->Fill(pim_delta_t);
 	}
 
 	/////////////////////////////////////////////////////////////////////
@@ -116,161 +160,29 @@ void delta_t_cut(void)
     TString pdfFileName = Form("delta_t_cuts.pdf");  
     canvas->Print(pdfFileName + "[");
 
-    p_delta_t_vs_p_FTOF->Draw("COLZ");
+    p_delta_t_vs_p_FD->Draw("COLZ");
     canvas->Update();
 	canvas->Print(pdfFileName);
 
-    p_delta_t_vs_p_CTOF->Draw("COLZ");
+    p_delta_t_vs_p_CD->Draw("COLZ");
     canvas->Update();
 	canvas->Print(pdfFileName);
 
-    pim_delta_t_vs_p_FTOF->Draw("COLZ");
+    pim_delta_t_vs_p_FD->Draw("COLZ");
     canvas->Update();
 	canvas->Print(pdfFileName);
 
-    pim_delta_t_vs_p_CTOF->Draw("COLZ");
+    pim_delta_t_vs_p_CD->Draw("COLZ");
     canvas->Update();
 	canvas->Print(pdfFileName);
 
     canvas->Print(pdfFileName + "]");
 	delete canvas;
 
-    double mean, sigma, leftLimit, rightLimit;
-    TF1 *fit;
-    TLine *l1;
-    TLine *l2;
-
-    TCanvas *canvas2 = new TCanvas("canvas", "Canvas Title", 800, 600);
-    TString pdfFileName2 = Form("FTOF_proton_delta_t.pdf");  
-    canvas2->Print(pdfFileName2 + "[");
-
-    for (int i = 0; i < 20; ++i)
-    {
-        p_delta_t_FTOF[i] -> Fit("gaus");
-        fit = p_delta_t_FTOF[i]->GetFunction("gaus");
-
-        p_delta_t_FTOF[i] -> Draw();
-
-        if (fit) {
-            mean  = fit->GetParameter(1);
-            sigma = fit->GetParameter(2);
-            leftLimit  = mean - 3.5 * sigma;
-            rightLimit = mean + 3.5 * sigma;
-
-            l1 = new TLine(mean - 3.5*sigma, 0, mean - 3.5*sigma, p_delta_t_FTOF[i]->GetMaximum());
-            l1->SetLineColor(kRed);
-            l1->Draw(); // ROOT запомнит этот конкретный объект на канвасе
-
-            l2 = new TLine(mean + 3.5*sigma, 0, mean + 3.5*sigma, p_delta_t_FTOF[i]->GetMaximum());
-            l2->SetLineColor(kRed);
-            l2->Draw();
-        }
-
-        canvas2->Update();
-	    canvas2->Print(pdfFileName2);
-    }
-
-    canvas2->Print(pdfFileName2 + "]");
-	delete canvas2;
-
-    TCanvas *canvas3 = new TCanvas("canvas", "Canvas Title", 800, 600);
-    TString pdfFileName3 = Form("CTOF_proton_delta_t.pdf");  
-    canvas3->Print(pdfFileName3 + "[");
-
-    for (int i = 0; i < 20; ++i)
-    {
-        p_delta_t_CTOF[i] -> Fit("gaus");
-        fit = p_delta_t_CTOF[i]->GetFunction("gaus");
-
-        p_delta_t_CTOF[i] -> Draw();
-
-        if (fit) {
-            mean  = fit->GetParameter(1);
-            sigma = fit->GetParameter(2);
-            leftLimit  = mean - 3.5 * sigma;
-            rightLimit = mean + 3.5 * sigma;
-
-            l1 = new TLine(mean - 3.5*sigma, 0, mean - 3.5*sigma, p_delta_t_CTOF[i]->GetMaximum());
-            l1->SetLineColor(kRed);
-            l1->Draw(); // ROOT запомнит этот конкретный объект на канвасе
-
-            l2 = new TLine(mean + 3.5*sigma, 0, mean + 3.5*sigma, p_delta_t_CTOF[i]->GetMaximum());
-            l2->SetLineColor(kRed);
-            l2->Draw();
-        }
-
-        canvas3->Update();
-	    canvas3->Print(pdfFileName3);
-    }
-
-    canvas3->Print(pdfFileName3 + "]");
-	delete canvas3;
-
-    TCanvas *canvas4 = new TCanvas("canvas", "Canvas Title", 800, 600);
-    TString pdfFileName4 = Form("FTOF_pim_delta_t.pdf");  
-    canvas4->Print(pdfFileName4 + "[");
-
-    for (int i = 0; i < 20; ++i)
-    {
-        pim_delta_t_FTOF[i] -> Fit("gaus");
-        fit = pim_delta_t_FTOF[i]->GetFunction("gaus");
-
-        pim_delta_t_FTOF[i] -> Draw();
-
-        if (fit) {
-            mean  = fit->GetParameter(1);
-            sigma = fit->GetParameter(2);
-            leftLimit  = mean - 3.5 * sigma;
-            rightLimit = mean + 3.5 * sigma;
-
-            l1 = new TLine(mean - 3.5*sigma, 0, mean - 3.5*sigma, pim_delta_t_FTOF[i]->GetMaximum());
-            l1->SetLineColor(kRed);
-            l1->Draw(); // ROOT запомнит этот конкретный объект на канвасе
-
-            l2 = new TLine(mean + 3.5*sigma, 0, mean + 3.5*sigma, pim_delta_t_FTOF[i]->GetMaximum());
-            l2->SetLineColor(kRed);
-            l2->Draw();
-        }
-
-        canvas4->Update();
-	    canvas4->Print(pdfFileName4);
-    }
-
-    canvas4->Print(pdfFileName4 + "]");
-	delete canvas4;
-
-    TCanvas *canvas5 = new TCanvas("canvas", "Canvas Title", 800, 600);
-    TString pdfFileName5 = Form("CTOF_pim_delta_t.pdf");  
-    canvas5->Print(pdfFileName5 + "[");
-
-    for (int i = 0; i < 20; ++i)
-    {
-        pim_delta_t_CTOF[i] -> Fit("gaus");
-        fit = pim_delta_t_CTOF[i]->GetFunction("gaus");
-
-        pim_delta_t_CTOF[i] -> Draw();
-
-        if (fit) {
-            mean  = fit->GetParameter(1);
-            sigma = fit->GetParameter(2);
-            leftLimit  = mean - 3.5 * sigma;
-            rightLimit = mean + 3.5 * sigma;
-
-            l1 = new TLine(mean - 3.5*sigma, 0, mean - 3.5*sigma, pim_delta_t_CTOF[i]->GetMaximum());
-            l1->SetLineColor(kRed);
-            l1->Draw(); // ROOT запомнит этот конкретный объект на канвасе
-
-            l2 = new TLine(mean + 3.5*sigma, 0, mean + 3.5*sigma, pim_delta_t_CTOF[i]->GetMaximum());
-            l2->SetLineColor(kRed);
-            l2->Draw();
-        }
-
-        canvas5->Update();
-	    canvas5->Print(pdfFileName5);
-    }
-
-    canvas5->Print(pdfFileName5 + "]");
-	delete canvas5;
+    MomentumBinsGraphs(p_delta_t_FD, "FD_proton_delta_t.pdf", -0.3, 0.2);
+    MomentumBinsGraphs(p_delta_t_CD, "CD_proton_delta_t.pdf", -0.3, 0.2);
+    MomentumBinsGraphs(pim_delta_t_FD, "FD_pim_delta_t.pdf", -0.3, 0.3);
+    MomentumBinsGraphs(pim_delta_t_CD, "CD_pim_delta_t.pdf", -0.25, 0.25);
 
     gSystem -> Exit(0);
 }
