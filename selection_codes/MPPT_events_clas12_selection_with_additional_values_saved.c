@@ -59,6 +59,9 @@ void MPPT_events_clas12_selection_with_additional_values_saved()
     float path_e, path_p, path_pim; // Measured path in SC
     int status_e, status_p, status_pim; // Particle status
 
+    int cal_sect_e, cal_layer_e; // Calorimeter electron values
+    float cal_x_e, cal_y_e;
+
     // Initializing histograms
     auto Missing_pi_plus_hist = new TH1F("Missing_pi_plus_hist", "Missing_pi_plus_hist", 100, -0.3, 0.7); // Might delete later
     auto W_hist = new TH1F("W_hist", "W_hist", 100, 0, 4);
@@ -88,6 +91,10 @@ void MPPT_events_clas12_selection_with_additional_values_saved()
     tree.Branch("time_e", &time_e, "time_e");
     tree.Branch("path_e", &path_e, "path_e");
     tree.Branch("status_e", &status_e, "status_e/I");
+    tree.Branch("cal_sect_e", &cal_sect_e, "cal_sect_e/I");
+    tree.Branch("cal_layer_e", &cal_layer_e, "cal_layer_e/I");
+    tree.Branch("cal_x_e", &cal_x_e, "cal_x_e");
+    tree.Branch("cal_y_e", &cal_y_e, "cal_y_e");
     // Final proton
     tree.Branch("px_p", &px_p, "px_p");
     tree.Branch("py_p", &py_p, "py_p");
@@ -244,6 +251,11 @@ void MPPT_events_clas12_selection_with_additional_values_saved()
                     if (ECAL.getInt("pindex", i) == 0)
                     {
                         CALesect = ECAL.getInt("sector", i);
+                        cal_sect_e = ECAL.getInt("sector", i);
+                        cal_layer_e = ECAL.getInt("layer", i);
+                        cal_x_e = ECAL.getFloat("x", i);
+                        cal_y_e = ECAL.getFloat("y", i);
+                        
                         if (ECAL.getInt("layer", i) == 1) 
                         {
                             E_PCAL = ECAL.getFloat("energy", i);
