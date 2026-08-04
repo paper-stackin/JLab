@@ -1,6 +1,21 @@
-#include "PCAL_config.h"
+#include <yaml-cpp/yaml.h>
 
-void PCAL_hist(void)
+#include "pcal_config.h"
+
+inline bool IsInExclusionStrip(int sector, double x, double y, 
+                               const std::vector<ExclusionStripSettings::ExclusionStripConfig>& strips, 
+                               double margin = 0.25)
+{
+    for (const auto& strip : strips) {
+    if (strip.sector != sector) continue;
+    const double y_lower = strip.slope * x + strip.c_min - margin;
+    const double y_upper = strip.slope * x + strip.c_max + margin;
+    if (y > y_lower && y < y_upper) return true;
+    }
+    return false;
+}
+
+void pcal_hist(void)
 {
     // Таймер
     auto start_time = std::chrono::steady_clock::now();
@@ -9,14 +24,14 @@ void PCAL_hist(void)
     PCALConfig cfg;
 
     // Гистограммы для каждого сектора и каждого бина по x'
-    TH1F *x_bins[6][cfg.N_x_bins];
+    TH1F *x_bins[6][cfg.histogram.n_x_bins];
     for (int i = 0; i < 6; ++i)
     {
-        for (int j = 0; j < cfg.N_x_bins; ++j)
+        for (int j = 0; j < cfg.histogram.n_x_bins; ++j)
         {
             TString name = Form("h_pcal_sec%d_bin%d", i + 1, j + 1);
-            TString title = Form("%s x' = [%d, %d] cm, sec = %d%s", cfg.histogram_title_prefix, cfg.x_start + cfg.bin_size * j, cfg.x_start + cfg.bin_size * (j + 1), i + 1, cfg.histogram_title_suffix);
-            x_bins[i][j] = new TH1F(name, title, cfg.N_y_bins, cfg.y_min, cfg.y_max);
+            TString title = Form("%s x' = [%d, %d] cm, sec = %d%s", cfg.histogram.title_prefix, cfg.histogram.x_start + cfg.histogram.bin_size * j, cfg.histogram.x_start + cfg.histogram.bin_size * (j + 1), i + 1, cfg.histogram.title_suffix);
+            x_bins[i][j] = new TH1F(name, title, cfg.histogram.n_y_bins, cfg.histogram.y_min, cfg.histogram.y_max);
         }
     }
 
@@ -26,16 +41,16 @@ void PCAL_hist(void)
     {
         h2_xpy[i] = new TH2F(
             Form("h2_sec%d", i+1),
-            Form("%s %d%s", cfg.histogram_2d_title_prefix, i+1, cfg.histogram_2d_title_suffix),
-            100, cfg.x_start, cfg.x_start + cfg.bin_size * cfg.N_x_bins,
-            100, cfg.y_min, cfg.y_max
+            Form("%s %d%s", cfg.histogram.title_2d_prefix, i+1, cfg.histogram.title_2d_suffix),
+            100, cfg.histogram.x_start, cfg.histogram.x_start + cfg.histogram.bin_size * cfg.histogram.n_x_bins,
+            100, cfg.histogram.y_min, cfg.histogram.y_max
         );
     }
 
     // Рут файл с импульсами частиц
     const char* file_name;
-    if (cfg.is_simulation)  file_name = cfg.input_file_sim;
-    else                   file_name = cfg.input_file_exp;
+    if (cfg.is_simulation)  file_name = cfg.file.input_file_sim.c_str();
+    else                   file_name = cfg.file.input_file_exp.c_str();
     TFile *infile_exp = TFile::Open(file_name);  
 
 	TTreeReader reader("MMpiptree", infile_exp);
@@ -48,7 +63,7 @@ void PCAL_hist(void)
     if (cfg.is_simulation)  weight = std::make_unique<TTreeReaderValue<Float_t>>(reader, "weight");
 
     // Счётчик событий
-    int totalEvents = reader.GetEntries(true) / cfg.cnt_speed;
+    int totalEvents = reader.GetEntries(true) / cfg.counter.speed;
     int counter = 0;
 
     // Чтение событий из дерева
@@ -56,20 +71,26 @@ void PCAL_hist(void)
     {	      
         // Счётчик событий
         counter++;
-        if (counter % cfg.cnt_speed == 0) {
-            cout << "\rProcessed: " << counter / cfg.cnt_speed << "/" << totalEvents << cfg.period << " events" << flush;
+        if (counter % cfg.counter.speed == 0) {
+            cout << "\rProcessed: " << counter / cfg.counter.speed << "/" << totalEvents << cfg.counter.period << " events" << flush;
         }
 
         // Отбор событий по слою
         if (*cal_layer_e != 1) continue;
+
+        // Inefficient PCAL Regions
+        if (cfg.exclusion.enable &&
+            IsInExclusionStrip(*cal_sect_e, *cal_x_e, *cal_y_e, cfg.exclusion.strips, cfg.exclusion.margin)) {
+            continue;
+        }
 
         // Распределение событий по секторам
         double angle = TMath::Pi() / 180.0 * (-60.0 * (*cal_sect_e - 1));
         double x = *cal_x_e * TMath::Cos(angle) - *cal_y_e * TMath::Sin(angle);
         double y = *cal_x_e * TMath::Sin(angle) + *cal_y_e * TMath::Cos(angle);
 
-        int bin = int((x - cfg.x_start) / float(cfg.bin_size));
-        if (bin < 0 || bin >= cfg.N_x_bins) continue;
+        int bin = int((x - cfg.histogram.x_start) / float(cfg.histogram.bin_size));
+        if (bin < 0 || bin >= cfg.histogram.n_x_bins) continue;
 
         // Заполнение гистограмм
         if (cfg.is_simulation)  x_bins[*cal_sect_e - 1][bin]->Fill(y, **weight);
@@ -80,10 +101,10 @@ void PCAL_hist(void)
 	}
 
     // Сохранение гистограмм в ROOT файл
-    TFile *file = new TFile("PCAL_hist.root", "RECREATE");
+    TFile *file = new TFile(cfg.file.intermediate_file.c_str(), "RECREATE");
     for (int i = 0; i < 6; ++i)
     {
-        for (int j = 0; j < cfg.N_x_bins; ++j)
+        for (int j = 0; j < cfg.histogram.n_x_bins; ++j)
         {   
             if (x_bins[i][j]) x_bins[i][j]->Write();
         }

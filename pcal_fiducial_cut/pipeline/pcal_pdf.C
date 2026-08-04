@@ -1,49 +1,44 @@
-#include "PCAL_config.h"
+#include "pcal_config.h"
+#include "pcal_boundaries.h"
 
-void InterpolateLocalDips(TH1F* hist, double relative_depth = 0.25, int max_width = 3)
+void InterpolateLocalDips(TH1F* hist, int sector, double x,
+                          const std::vector<ExclusionStripSettings::ExclusionStripConfig>& strips,
+                          double strip_margin)
 {
-    int n_bins = hist->GetNbinsX();
+    const int n_bins = hist->GetNbinsX();
 
-    for (int i = 2; i <= n_bins - 1; ) {
-        bool filled = false;
+    for (const auto& strip : strips) {
+        if (strip.sector != sector) continue;
 
-        for (int width = std::min(max_width, n_bins - i); width >= 1; --width) {
-            int j = i + width - 1;
-            if (j >= n_bins - 1) continue;
+        // Поворачиваем прямую на угол, соответствующий сектору
+        double angle = TMath::Pi() / 180.0 * (-60.0 * (sector - 1));
+        double denominator = TMath::Cos(angle) - TMath::Sin(angle) * strip.slope;
+        double new_slope = (TMath::Sin(angle) + TMath::Cos(angle) * strip.slope) / denominator;
+        double new_c_max = (strip.c_max + strip_margin) / denominator;
+        double new_c_min = (strip.c_min - strip_margin) / denominator;
 
-            double left_neighbor = hist->GetBinContent(i - 1);
-            double right_neighbor = hist->GetBinContent(j + 1);
-            double baseline = 0.5 * (left_neighbor + right_neighbor);
+        const double y_lower = new_slope * x + new_c_min;
+        const double y_upper = new_slope * x + new_c_max;
 
-            double region_sum = 0.0;
-            for (int k = i; k <= j; ++k) {
-                region_sum += hist->GetBinContent(k);
-            }
-            double region_avg = region_sum / width;
-            double depth = baseline - region_avg;
-
-            if (left_neighbor > region_avg && right_neighbor > region_avg &&
-                baseline > 0.0 &&
-                (depth / baseline) > relative_depth) {
-                std::vector<int> bins_to_fill;
-                for (int k = i; k <= j; ++k) {
-                    bins_to_fill.push_back(k);
-                }
-                if (i > 1) bins_to_fill.push_back(i - 1);
-                if (j < n_bins) bins_to_fill.push_back(j + 1);
-
-                for (int k : bins_to_fill) {
-                    hist->SetBinContent(k, baseline);
-                }
-
-                i = j + 1;
-                filled = true;
-                break;
+        int k_first = -1;
+        int k_last = -1;
+        for (int k = 1; k <= n_bins; ++k) {
+            const double y = hist->GetBinCenter(k);
+            if (y > y_lower && y < y_upper) {
+                if (k_first < 0) k_first = k;
+                k_last = k;
             }
         }
+        if (k_first < 0) continue;
 
-        if (!filled) {
-            ++i;
+        const int k_left = k_first - 1;
+        const int k_right = k_last + 1;
+        if (k_left < 1 || k_right > n_bins) continue;
+
+        const double baseline = 0.5 * (hist->GetBinContent(k_left) + hist->GetBinContent(k_right));
+        // for (int k = k_first; k <= k_last; ++k) {
+        for (int k = k_left; k <= k_right; ++k) {
+            hist->SetBinContent(k, baseline);
         }
     }
 }
@@ -94,7 +89,7 @@ std::pair<TGraph*, TF1*> DrawGraphWithFit(const std::vector<double>& x_vals, con
     return {graph, fit};
 }
 
-void PCAL_pdf(void)
+void pcal_pdf(void)
 {
     // Таймер
     auto start_time = std::chrono::steady_clock::now();
@@ -103,22 +98,22 @@ void PCAL_pdf(void)
     PCALConfig cfg;
 
     // Настройки стиля
-    gStyle->SetOptStat(cfg.stat_option);
-    gROOT->SetBatch(cfg.use_batch ? kTRUE : kFALSE);
-    gStyle->SetPalette(cfg.palette);
-    gStyle->SetOptFit(cfg.fit_option);
+    gStyle->SetOptStat(cfg.style.stat_option);
+    gROOT->SetBatch(cfg.style.use_batch ? kTRUE : kFALSE);
+    gStyle->SetPalette(cfg.style.palette);
+    gStyle->SetOptFit(cfg.style.fit_option);
     gErrorIgnoreLevel = kError;
-    gPrintViaErrorHandler = kTRUE;
+    gPrintViaErrorHandler = kTRUE; 
 
     // Файл с гистограммами
-    TFile *file = TFile::Open("PCAL_hist.root");
+    TFile *file = TFile::Open(cfg.file.intermediate_file.c_str());
 
     // Гистограммы для каждого сектора и каждого бина по x'
-    TH1F *x_bins[6][cfg.N_x_bins];
-    TH1F *x_bins_interp[6][cfg.N_x_bins];
+    TH1F *x_bins[6][cfg.histogram.n_x_bins];
+    TH1F *x_bins_interp[6][cfg.histogram.n_x_bins];
     for (int i = 0; i < 6; ++i)
     {
-        for (int j = 0; j < cfg.N_x_bins; ++j)
+        for (int j = 0; j < cfg.histogram.n_x_bins; ++j)
         {
             TString name = Form("h_pcal_sec%d_bin%d", i + 1, j + 1);
             x_bins[i][j] = (TH1F*)file->Get(name);
@@ -135,19 +130,23 @@ void PCAL_pdf(void)
     }
 
     //  Интерполяция провалов в 1D гистограммах
-    if (cfg.enable_dip_interpolation) {
-        for (const auto& sector_cfg : cfg.dip_interpolation_sectors) {
+    if (cfg.dip.enable) {
+        for (const auto& sector_cfg : cfg.dip.sectors) {
             int sec = sector_cfg.sector;
             int sec_idx = sec - 1;
             if (sec_idx < 0 || sec_idx >= 6) continue;
 
             int start_bin = std::max(0, sector_cfg.start_bin - 1);
-            int end_bin = (sector_cfg.end_bin > 0) ? std::min(cfg.N_x_bins - 1, sector_cfg.end_bin - 1) : cfg.N_x_bins - 1;
+            int end_bin = (sector_cfg.end_bin > 0) ? std::min(cfg.histogram.n_x_bins - 1, sector_cfg.end_bin - 1) : cfg.histogram.n_x_bins - 1;
 
             for (int bin = start_bin; bin <= end_bin; ++bin) {
                 TString interp_name = Form("h_pcal_sec%d_bin%d_interp", sec, bin + 1);
                 x_bins_interp[sec_idx][bin] = (TH1F*)x_bins[sec_idx][bin]->Clone(interp_name);
-                InterpolateLocalDips(x_bins_interp[sec_idx][bin], sector_cfg.relative_depth, cfg.dip_max_width);
+                if (cfg.exclusion.enable) {
+                    const double x = cfg.histogram.x_start + cfg.histogram.bin_size * (bin + 0.5);
+                    InterpolateLocalDips(x_bins_interp[sec_idx][bin], sec, x,
+                                         cfg.exclusion.strips, cfg.exclusion.margin);
+                }
             }
         }
     }
@@ -158,39 +157,38 @@ void PCAL_pdf(void)
         TCanvas *c = new TCanvas(
             Form("c_sec%d", sec + 1),
             Form("Sector %d", sec + 1),
-            cfg.canvas_width, cfg.canvas_height
+            cfg.style.canvas_width, cfg.style.canvas_height
         );
 
-        TString pdf_name = Form("%s%d%s", cfg.pdf_name_prefix, sec + 1, cfg.pdf_extension);
+        TString pdf_name = Form("%s%d.pdf", cfg.file.pdf_name_prefix.c_str(), sec + 1);
         c->Print(pdf_name + "[");
 
+        // Точки для построения графиков верхней и нижней границ
         std::vector<double> x_vals, upper_vals, lower_vals;
 
         // Распределение по бинам x'
-        for (int bin = 0; bin < cfg.N_x_bins; ++bin)
+        for (int bin = 0; bin < cfg.histogram.n_x_bins; ++bin)
         {
             // Гистограммы
             x_bins[sec][bin]->SetLineColor(kBlue);
             x_bins[sec][bin]->SetLineWidth(2);
             x_bins[sec][bin]->Draw("HIST");
 
-            if (cfg.enable_dip_interpolation && x_bins_interp[sec][bin]) {
+            if (cfg.dip.enable && x_bins_interp[sec][bin]) {
                 x_bins_interp[sec][bin]->SetLineColor(kRed);
                 x_bins_interp[sec][bin]->SetLineWidth(1);
                 x_bins_interp[sec][bin]->Draw("HIST SAME");
             } 
 
-            // Квантили вертикальных линий 
-            double probs[2] = {cfg.quantile_low, cfg.quantile_high}, quant[2];
-            
-            if (cfg.enable_dip_interpolation && x_bins_interp[sec][bin]) {
-                x_bins_interp[sec][bin]->GetQuantiles(2, quant, probs);
-            } else {
-                x_bins[sec][bin]->GetQuantiles(2, quant, probs);
-            }
+            TH1F* hist_for_bounds = (cfg.dip.enable && x_bins_interp[sec][bin])
+                ? x_bins_interp[sec][bin]
+                : x_bins[sec][bin];
 
-            // Вертикальные линии
-            double y_lower = quant[0], y_upper = quant[1];
+            const char* fit_name = Form("sg_fit_sec%d_bin%d", sec + 1, bin + 1);
+            auto bounds = ComputeVerticalBounds(hist_for_bounds, cfg, fit_name);
+            double y_lower = bounds.first;
+            double y_upper = bounds.second;
+
             gPad->Update();
             double top = gPad->GetUymax();
 
@@ -200,17 +198,20 @@ void PCAL_pdf(void)
             // Легенда
             TLegend* leg = new TLegend(0.6, 0.6, 0.93, 0.93);
             leg->AddEntry((TObject*)0, Form("Total events = %.0f", x_bins[sec][bin]->Integral()), "");
-            if (cfg.enable_dip_interpolation && x_bins_interp[sec][bin]) {
+            if (cfg.dip.enable && x_bins_interp[sec][bin]) {
                 leg->AddEntry((TObject*)0, Form("Total events with interpolation= %.0f", x_bins_interp[sec][bin]->Integral()), "");
             }
             leg->AddEntry((TObject*)0, Form("left = %.4f cm", y_lower), "");
             leg->AddEntry((TObject*)0, Form("right = %.4f cm", y_upper), "");
+            // if (cfg.boundary.use_supergauss) {
+            //     leg->AddEntry(sg_fit, Form("SuperGauss (n = %d)", cfg.boundary.supergauss_n), "l");
+            // }
             leg->Draw();
 
             c->Print(pdf_name);
 
             // Точки для построения графиков верхней и нижней границ
-            double x = cfg.x_start + cfg.bin_size * (bin + 0.5);
+            double x = cfg.histogram.x_start + cfg.histogram.bin_size * (bin + 0.5);
 
             x_vals.push_back(x);
             lower_vals.push_back(y_lower);
@@ -221,12 +222,12 @@ void PCAL_pdf(void)
         h2_xpy[sec]->Draw("COLZ");
 
         // Radial каты
-        DrawCircle(cfg.r_min, cfg.radial_phi1_deg, cfg.radial_phi2_deg);
-        DrawCircle(cfg.r_max, cfg.radial_phi1_deg, cfg.radial_phi2_deg);
+        DrawCircle(cfg.radial.r_min, cfg.radial.phi_1, cfg.radial.phi_2);
+        DrawCircle(cfg.radial.r_max, cfg.radial.phi_1, cfg.radial.phi_2);
 
         // Верхняя и нижняя границы
-        std::pair<TGraph*, TF1*> lower_result = DrawGraphWithFit(x_vals, lower_vals, cfg.fit_formula, cfg.x_fit_min, cfg.x_fit_max, kRed, "f_lower");
-        std::pair<TGraph*, TF1*> upper_result = DrawGraphWithFit(x_vals, upper_vals, cfg.fit_formula, cfg.x_fit_min, cfg.x_fit_max, kRed, "f_upper");
+        std::pair<TGraph*, TF1*> lower_result = DrawGraphWithFit(x_vals, lower_vals, cfg.boundary.fit_formula, cfg.boundary.x_fit_min, cfg.boundary.x_fit_max, kRed, "f_lower");
+        std::pair<TGraph*, TF1*> upper_result = DrawGraphWithFit(x_vals, upper_vals, cfg.boundary.fit_formula, cfg.boundary.x_fit_min, cfg.boundary.x_fit_max, kRed, "f_upper");
         TGraph* g_lower = lower_result.first;
         TF1* f_lower = lower_result.second;
         TGraph* g_upper = upper_result.first;
