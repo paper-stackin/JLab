@@ -1,0 +1,127 @@
+# Экспериментальные данные
+use_weights: false
+
+# Имена файлов входов и выходов
+file:
+  main_folder: "/home/stepan/root_progs/2pion_new/pcal_fiducial_cut"
+
+  input_file: "/input_data/check_pcal.root"
+  intermediate_file: "/intermediate_data/PCAL_hist_exp.root"
+  pdf_name_prefix: "/output_graphs/experiment/PCAL_sector_"
+
+# Параметры для гистограмм
+histogram:
+  x_start: 110
+  n_x_bins: 26
+  bin_size: 10
+
+  n_y_bins: 150
+  y_min: -200
+  y_max: 200
+
+# Исключение событий между линиями y = m*x + c_min - margin и y = m*x + c_max + margin
+exclusion:
+  enable: true
+  margin: 0.25
+
+  strips:
+    - sector: 1
+      slope: 0.56575
+      c_min: -94.4
+      c_max: -92.0
+
+    - sector: 1
+      slope: 0.56575
+      c_min: -103.5
+      c_max: -101.1
+
+    - sector: 1
+      slope: 0.56575
+      c_min: -221.4
+      c_max: -219.0
+
+    - sector: 1
+      slope: 0.56575
+      c_min: -229.4
+      c_max: -227.0
+
+    - sector: 2
+      slope: 0.5900
+      c_min: 114.4
+      c_max: 120.8
+
+    - sector: 4
+      slope: -0.5680
+      c_min: -236.3
+      c_max: -232.8
+
+    - sector: 6
+      slope: -0.59138
+      c_min: -187.0
+      c_max: -185.0
+
+    - sector: 6
+      slope: -0.59138
+      c_min: -195.5
+      c_max: -193.3
+
+# Интерполяция провалов в 1D гистограммах
+dip:
+  enable: false
+
+  sectors:
+    - sector: 1
+      start_bin: 2
+      end_bin: 20
+
+    - sector: 2
+      start_bin: 5
+      end_bin: 20
+
+    - sector: 4
+      start_bin: 14
+      end_bin: 24
+
+    - sector: 6
+      start_bin: 8
+      end_bin: 22
+
+# Параметры для построения графиков верхней и нижней границ
+boundary:
+  use_supergauss: false
+
+  supergauss_n: 6
+  supergauss_level: 0.2
+
+  quantile_low: 0.05
+  quantile_high: 0.95
+
+  fit_formula: "pol2"
+
+  x_fit_min: 140
+  x_fit_max: 240
+
+# Параметры Radial cut
+radial:
+  r_min: 150
+  r_max: 360
+
+  phi_1: -45.0
+  phi_2: 45.0
+
+# Настройки стиля
+style:
+  use_batch: true
+
+  palette: 55
+
+  stat_option: 0
+  fit_option: 0
+
+  canvas_width: 1500
+  canvas_height: 1000
+
+# Счётчик событий
+counter:
+  speed: 1000000
+  period: "M"

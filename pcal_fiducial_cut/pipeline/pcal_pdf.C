@@ -1,4 +1,4 @@
-#include "pcal_config.h"
+#include "pcal_config_yaml.h"
 #include "pcal_boundaries.h"
 
 void InterpolateLocalDips(TH1F* hist, int sector, double x,
@@ -89,13 +89,13 @@ std::pair<TGraph*, TF1*> DrawGraphWithFit(const std::vector<double>& x_vals, con
     return {graph, fit};
 }
 
-void pcal_pdf(void)
+void pcal_pdf(const char* config_file)
 {
     // Таймер
     auto start_time = std::chrono::steady_clock::now();
     
     // Конфигурация
-    PCALConfig cfg;
+    PCALConfig cfg = LoadConfig(config_file);
 
     // Настройки стиля
     gStyle->SetOptStat(cfg.style.stat_option);

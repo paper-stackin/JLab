@@ -8,9 +8,7 @@
 struct FileConfig {
     std::string main_folder = "/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/";
 
-    std::string input_file_sim = main_folder + "input_data/check_pcal_simulation.root";
-
-    std::string input_file_exp = main_folder + "input_data/check_pcal.root";
+    std::string input_file = main_folder + "input_data/check_pcal.root";
 
     std::string intermediate_file = main_folder + "intermediate_data/PCAL_hist.root";
 
@@ -122,8 +120,8 @@ struct CounterConfig {
 };
 
 struct PCALConfig {
-    // Симуляция или экспериментальные данные
-    bool is_simulation = true;
+    // Брать ли веса
+    bool use_weights = true;
 
     FileConfig file;
 

@@ -1,6 +1,5 @@
 #include <yaml-cpp/yaml.h>
-
-#include "pcal_config.h"
+#include "pcal_config_yaml.h"
 
 inline bool IsInExclusionStrip(int sector, double x, double y, 
                                const std::vector<ExclusionStripSettings::ExclusionStripConfig>& strips, 
@@ -15,13 +14,13 @@ inline bool IsInExclusionStrip(int sector, double x, double y,
     return false;
 }
 
-void pcal_hist(void)
+void pcal_hist(const char* config_file)
 {
     // Таймер
     auto start_time = std::chrono::steady_clock::now();
     
     // Конфигурация
-    PCALConfig cfg;
+    PCALConfig cfg = LoadConfig(config_file);
 
     // Гистограммы для каждого сектора и каждого бина по x'
     TH1F *x_bins[6][cfg.histogram.n_x_bins];
@@ -48,10 +47,7 @@ void pcal_hist(void)
     }
 
     // Рут файл с импульсами частиц
-    const char* file_name;
-    if (cfg.is_simulation)  file_name = cfg.file.input_file_sim.c_str();
-    else                   file_name = cfg.file.input_file_exp.c_str();
-    TFile *infile_exp = TFile::Open(file_name);  
+    TFile *infile_exp = TFile::Open(cfg.file.input_file.c_str()); 
 
 	TTreeReader reader("MMpiptree", infile_exp);
     TTreeReaderValue<Int_t> cal_sect_e(reader, "cal_sect_e");
@@ -60,7 +56,7 @@ void pcal_hist(void)
     TTreeReaderValue<Float_t> cal_y_e(reader, "cal_y_e");
 
     std::unique_ptr<TTreeReaderValue<Float_t>> weight;
-    if (cfg.is_simulation)  weight = std::make_unique<TTreeReaderValue<Float_t>>(reader, "weight");
+    if (cfg.use_weights)  weight = std::make_unique<TTreeReaderValue<Float_t>>(reader, "weight");
 
     // Счётчик событий
     int totalEvents = reader.GetEntries(true) / cfg.counter.speed;
@@ -93,10 +89,10 @@ void pcal_hist(void)
         if (bin < 0 || bin >= cfg.histogram.n_x_bins) continue;
 
         // Заполнение гистограмм
-        if (cfg.is_simulation)  x_bins[*cal_sect_e - 1][bin]->Fill(y, **weight);
+        if (cfg.use_weights)  x_bins[*cal_sect_e - 1][bin]->Fill(y, **weight);
         else                    x_bins[*cal_sect_e - 1][bin]->Fill(y);
 
-        if (cfg.is_simulation)  h2_xpy[*cal_sect_e - 1]->Fill(x, y, **weight);
+        if (cfg.use_weights)  h2_xpy[*cal_sect_e - 1]->Fill(x, y, **weight);
         else                    h2_xpy[*cal_sect_e - 1]->Fill(x, y);
 	}
 
