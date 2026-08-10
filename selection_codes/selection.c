@@ -1,3 +1,5 @@
+#include <chrono>
+#include <iomanip>
 #include <memory>
 
 #include "constants.h"
@@ -30,12 +32,13 @@ std::pair<double, double> Rotate(double x, double y, double angle)
 }
 
 void GetDCInfo(const hipo::bank& Track,
-                       const hipo::bank& Traj,
                        int part_index,
-                       int i,
                        int& DC_sect,
                        double DC_x[3],
-                       double DC_y[3])
+                       double DC_y[3],
+                       int layer,
+                       double x,
+                       double y)
 {
     const int dc_layers[3] = {6, 18, 36};
 
@@ -46,27 +49,26 @@ void GetDCInfo(const hipo::bank& Track,
 
         if (!in_DC) continue;
 
-        int layer = Traj.getInt("layer", i);
-        float x = Traj.getFloat("x", i);
-        float y = Traj.getFloat("y", i);
-
         if (layer == dc_layers[0])
             DC_sect = Track.getInt("sector", k);
 
         for (int j = 0; j < 3; j++)
         {
-            if (layer == dc_layers[j])
-            {
-                DC_x[j] = x;
-                DC_y[j] = y;
-                break;
-            }
+            if (layer != dc_layers[j])  continue;
+            
+            DC_x[j] = x;
+            DC_y[j] = y;
         }
     }
 }
 
 void selection()
 {
+    std::ios::sync_with_stdio(false);
+
+    // Timer
+    auto start_time = std::chrono::steady_clock::now();
+
     float px_e, py_e, pz_e; // Final electron
     float px_p, py_p, pz_p; // Final proton
     float px_pim, py_pim, pz_pim;   // Pi minus
@@ -74,6 +76,8 @@ void selection()
 
     // Initializing TTree
     TTree tree(cfg.file.tree_name.c_str(), cfg.file.tree_title.c_str());
+    tree.SetAutoSave(1e6);
+    // tree.SetBasketSize(0, 32 * 1024);
 
     // Final electron
     tree.Branch("px_e", &px_e, "px_e");
@@ -108,7 +112,7 @@ void selection()
         if (!infile.good()) continue;
         reader.open(data[k].c_str());
 
-        std::cout << std::endl << std::endl;
+        std::cout << std::endl;
 
         hipo::dictionary factory;
         reader.readDictionary(factory);
@@ -147,7 +151,7 @@ void selection()
                 event.getStructure(*mc_bank);
             }
 
-            int part_rows = PART.getRows();
+            const int part_rows = PART.getRows();
     
             if (part_rows == 0) continue;
             
@@ -175,7 +179,7 @@ void selection()
             if (!HadronInFDOrCD(PART, p_index)) continue; // Proton should be in FD or CD
             if (!HadronInFDOrCD(PART, pim_index)) continue; // Pi minus should be in FD or CD
 
-            // Setting registered particles parameteres
+            // Setting particles parameteres
             TLorentzVector beam(0, 0, cfg.E_beam, cfg.E_beam);
             TLorentzVector p_in(0, 0, 0, mc.M_p);
             TLorentzVector  el = MakeParticle(el_index, mc.M_el, PART);
@@ -275,16 +279,19 @@ void selection()
 
             for(int i = 0; i < Traj.getRows(); i++) 
             {
-                int part_index = Traj.getInt("pindex", i);
-
                 if (Traj.getInt("detector", i) != 6) continue;
 
+                int part_index = Traj.getInt("pindex", i);
+                int layer = Traj.getInt("layer", i);
+                double x = Traj.getFloat("x", i);
+                double y = Traj.getFloat("y", i);
+
                 // Electron
-                if(part_index == el_index)                  GetDCInfo(Track, Traj, part_index, i, DC_el_sect, DC_el_x.data(), DC_el_y.data());
+                if(part_index == el_index)                  GetDCInfo(Track, part_index, DC_el_sect, DC_el_x.data(), DC_el_y.data(), layer, x, y);
                 // Proton 
-                if(p_in_FD && part_index == p_index)        GetDCInfo(Track, Traj, part_index, i, DC_p_sect, DC_p_x.data(), DC_p_y.data());
+                if(p_in_FD && part_index == p_index)        GetDCInfo(Track, part_index, DC_p_sect, DC_p_x.data(), DC_p_y.data(), layer, x, y);
                 // Pi- 
-                if(pim_in_FD && part_index == pim_index)    GetDCInfo(Track, Traj, part_index, i, DC_pim_sect, DC_pim_x.data(), DC_pim_y.data());
+                if(pim_in_FD && part_index == pim_index)    GetDCInfo(Track, part_index, DC_pim_sect, DC_pim_x.data(), DC_pim_y.data(), layer, x, y);
             }
             
             // DC fiducial cut for electron
@@ -355,6 +362,19 @@ void selection()
     std::cout << std::endl << std::endl;
     std::cout << "Entries: " << nentries << std::endl;
     file->Close();
+
+    // Timer
+    auto end_time = std::chrono::steady_clock::now();
+    auto elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time).count();
+
+    const auto hours = elapsed_seconds / 3600;
+    const auto minutes = (elapsed_seconds % 3600) / 60;
+    const auto seconds = elapsed_seconds % 60;
+
+    std::cout << "Finished in "
+              << std::setw(2) << std::setfill('0') << hours << ":"
+              << std::setw(2) << std::setfill('0') << minutes << ":"
+              << std::setw(2) << std::setfill('0') << seconds << std::endl;
 
     gSystem->Exit(0);
 }
