@@ -1,0 +1,30 @@
+input: /home/stepan/root_progs/2pion/root_trees/nounid.root
+tree_name: MM0tree
+output: interim/mm_pip_hists_m_0.root
+hist_name: MMpiplus_from_MM0_topology
+
+n_hist_bins: 100
+hist_min: -0.3
+hist_max: 0.7
+
+Q2_edges:
+  - 0.5
+  - 0.7
+  - 1.0
+  - 1.4
+  - 2.0
+  - 3.0
+  - 5.5
+
+n_W_bins: 64
+W_min: 1.4
+W_max: 3.0
+W_bin_size: 0.025
+
+E_beam: 6.535
+M_proton: 0.93827
+M_pion: 0.13957
+M_electron: 0.0
+
+speed: 1000000
+period: M
