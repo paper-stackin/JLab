@@ -75,17 +75,23 @@ void selection()
     int status_p, status_pim;
     float weight;   // Weight (used in simulation)
 
+    int cal_sect_e, cal_layer_e; // Calorimeter electron values
+    float cal_x_e, cal_y_e;
+
     TFile* hfile =  new TFile(cfg.file.output.c_str(), "RECREATE");
 
     // Initializing TTree
     TTree tree(cfg.file.tree_name.c_str(), cfg.file.tree_title.c_str());
     tree.SetAutoSave(1e6);
-    // tree.SetBasketSize(0, 32 * 1024);
 
     // Final electron
     tree.Branch("px_e", &px_e, "px_e/F");
     tree.Branch("py_e", &py_e, "py_e/F");
     tree.Branch("pz_e", &pz_e, "pz_e/F");
+    tree.Branch("cal_sect_e", &cal_sect_e, "cal_sect_e/I");
+    tree.Branch("cal_layer_e", &cal_layer_e, "cal_layer_e/I");
+    tree.Branch("cal_x_e", &cal_x_e, "cal_x_e");
+    tree.Branch("cal_y_e", &cal_y_e, "cal_y_e");
     // Final proton
     tree.Branch("px_p", &px_p, "px_p/F");
     tree.Branch("py_p", &py_p, "py_p/F");
@@ -228,6 +234,29 @@ void selection()
                 else if (ecal_layer == 7)
                 {
                     EC_out = ecal_energy;
+                }
+            }
+
+            cal_sect_e = -1;
+            cal_layer_e = -1;
+            cal_x_e = 0;
+            cal_y_e = 0;
+
+            for (int i = 0; i < ECAL.getRows(); i++)
+            {
+                int layer = ECAL.getInt("layer", i);
+
+                if (layer == 1)
+                {
+                    int pindex = ECAL.getShort("pindex", i);
+
+                    if (pindex == 0)
+                    {
+                        cal_sect_e = ECAL.getInt("sector", i);
+                        cal_layer_e = ECAL.getInt("layer", i);
+                        cal_x_e = ECAL.getFloat("x", i);
+                        cal_y_e = ECAL.getFloat("y", i);
+                    }
                 }
             }
 

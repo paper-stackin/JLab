@@ -1,5 +1,47 @@
 #include "pip_missing_mass_config.h"
 
+double EvaluatePolynomial(const double* p, double x)
+{
+    return p[0] + x * (p[1] + x * (p[2] + x * p[3]));
+}
+
+bool PCalFiducialCut(
+    int cal_layer_e,
+    int cal_sect_e,
+    double cal_x_e,
+    double cal_y_e
+)
+{
+    const double p_lower[6][4] = {
+                    {175.997,-2.19104,0.00698198,-9.2885e-06},
+                    {219.797,-2.71269,0.00891301,-1.15516e-05},
+                    {226.274,-2.84365,0.00957273,-1.23558e-05},
+                    {181.685,-2.2416,0.00702503,-9.08476e-06},
+                    {223.327,-2.79671,0.00935171,-1.20265e-05},
+                    {152.767,-1.77109,0.004802,-5.80913e-06}
+                };
+
+    const double p_upper[6][4] = {
+                    {-176.431,2.16702,-0.00665704,8.51867e-06},
+                    {-214.182,2.60839,-0.00830054,1.04541e-05},
+                    {-227.966,2.84059,-0.00948886,1.21912e-05},
+                    {-178.192,2.23739,-0.00721147,9.56152e-06},
+                    {-207.242,2.58685,-0.00845863,1.083e-05},
+                    {-168.544,2.08019,-0.00634868,8.22812e-06}
+                };
+
+    if (cal_layer_e != 1) return true;
+
+    double angle = TMath::Pi() / 180.0 * (-60.0 * (cal_sect_e - 1));
+    double x = cal_x_e * TMath::Cos(angle) - cal_y_e * TMath::Sin(angle);
+    double y = cal_x_e * TMath::Sin(angle) + cal_y_e * TMath::Cos(angle);
+
+    const double y_lower = EvaluatePolynomial(p_lower[cal_sect_e - 1], x);
+    const double y_upper = EvaluatePolynomial(p_upper[cal_sect_e - 1], x);
+
+    return y > y_upper || y < y_lower;
+}
+
 void pip_missing_mass(const char* config_file)
 {
     // Timer
@@ -28,6 +70,10 @@ void pip_missing_mass(const char* config_file)
     TTreeReaderValue<Float_t> px_e(reader, "px_e");
     TTreeReaderValue<Float_t> py_e(reader, "py_e");
     TTreeReaderValue<Float_t> pz_e(reader, "pz_e");
+    TTreeReaderValue<Int_t> cal_sect_e(reader, "cal_sect_e");
+    TTreeReaderValue<Int_t> cal_layer_e(reader, "cal_layer_e");
+    TTreeReaderValue<Float_t> cal_x_e(reader, "cal_x_e");
+    TTreeReaderValue<Float_t> cal_y_e(reader, "cal_y_e");
 
     TTreeReaderValue<Float_t> px_p(reader, "px_p");
     TTreeReaderValue<Float_t> py_p(reader, "py_p");
@@ -51,6 +97,8 @@ void pip_missing_mass(const char* config_file)
         {
             cout << "\rProcessed: " << counter / cfg.speed << "/" << totalEvents << cfg.period << " events" << flush;
         }
+
+        if (PCalFiducialCut(*cal_layer_e, *cal_sect_e, *cal_x_e, *cal_y_e)) continue;
 
         TLorentzVector el, pim, p_final;
         el.SetXYZM(*px_e, *py_e, *pz_e, cfg.M_electron);
