@@ -172,6 +172,10 @@ void pcal_pdf(const char* config_file)
         }
     }
 
+    // Файлы для параметров катов
+    std::ofstream upper_file("upper.txt");
+    std::ofstream lower_file("lower.txt");
+
     // Графики для каждого сектора
     for (int sec = 0; sec < 6; ++sec)
     {
@@ -260,6 +264,20 @@ void pcal_pdf(const char* config_file)
         TGraph* g_upper = upper_result.first;
         TF1* f_upper = upper_result.second;
 
+        // Выводим параметры фитов в txt
+        for (int i = 0; i < 4; ++i) {
+            if (i > 0) {
+                upper_file << ",";
+                lower_file << ",";
+            }
+
+            upper_file << f_upper->GetParameter(i);
+            lower_file << f_lower->GetParameter(i);
+        }
+
+        upper_file << "\n";
+        lower_file << "\n";
+
         // Легенда
         // h2_xpy[sec]->SetStats(0); 
         // TLegend* leg_2d = new TLegend(0.7, 0.7, 0.93, 0.93);
@@ -282,6 +300,9 @@ void pcal_pdf(const char* config_file)
         delete c;
     }
 
+    upper_file.close();
+    lower_file.close();
+
     // Таймер
     auto end_time = std::chrono::steady_clock::now();
     auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
@@ -289,5 +310,5 @@ void pcal_pdf(const char* config_file)
 
     std::cout << "\nFinished in " << std::fixed << std::setprecision(3) << elapsed_s << " s" << std::endl;
 
-    gSystem->Exit(0);
+    gApplication->Terminate(0);
 }
