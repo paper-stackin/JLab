@@ -39,7 +39,9 @@ bool PCalFiducialCut(
     const double y_lower = EvaluatePolynomial(p_lower[cal_sect_e - 1], x);
     const double y_upper = EvaluatePolynomial(p_upper[cal_sect_e - 1], x);
 
-    return y > y_upper || y < y_lower;
+    const double r = sqrt(x * x + y * y);
+
+    return y > y_upper || y < y_lower || r < 150;
 }
 
 void pip_missing_mass(const char* config_file)
