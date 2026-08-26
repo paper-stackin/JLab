@@ -31,6 +31,280 @@ Double_t combined(Double_t *x, Double_t *par)
     return background(x, par) + peak(x, &par[3]);
 }
 
+struct BackgroundFitConfig
+{
+    int q_min = 0;
+    int q_max = 5;
+
+    int w_fit_min = 8;
+    int w_fit_max = 17;
+
+    int w_reper_q45 = 3;
+    int bg_fit_start = 13;
+
+    double xmin = -0.2;
+
+    double xmax_low = 0.15;
+    double xmax_mid = 0.25;
+    double xmax_high = 0.4;
+
+    int xmax_mid_start = 10;
+    int xmax_high_start = 17;
+
+    double bg_mean = -1.0;
+    double bg_sigma = 0.3;
+
+    int bg_ampl_bin = 25;
+    double bg_ampl_factor = 0.3;
+
+    double signal_mean = 0.0196;
+    double signal_sigma = 0.03;
+    double signal_tail = 0.02;
+
+    double bg_integral_xmin = -0.05;
+    double bg_integral_xmax = 0.1;
+    double bin_width_factor = 100.0;
+};
+
+void CalculateBackgroundIntegral(
+    TH1F* MM_raw[12][100],
+    std::vector<double>* intergral_background,
+    std::vector<double>* intergral_background_error,
+    std::vector<double>* w_bg_fit,
+    const BackgroundFitConfig& cfg)
+{
+    for (int q = cfg.q_min; q <= cfg.q_max; ++q)
+    {
+        int w_reper = cfg.w_fit_min;
+
+        if (q == 4 || q == 5)
+            w_reper = cfg.w_reper_q45;
+
+        for (int w = w_reper; w <= cfg.w_fit_max; ++w)
+        {
+            double current_xmax;
+
+            if (w < cfg.xmax_mid_start)
+                current_xmax = cfg.xmax_low;
+            else if (w < cfg.xmax_high_start)
+                current_xmax = cfg.xmax_mid;
+            else
+                current_xmax = cfg.xmax_high;
+
+            int N_bg = 0;
+
+            if (w >= cfg.bg_fit_start)
+            {
+                TF1* fitfunc = new TF1(
+                    Form("fitfunc_q%d_w%d", q, w),
+                    combined,
+                    cfg.xmin,
+                    current_xmax,
+                    7
+                );
+
+                double bg_ampl =
+                    MM_raw[q][w]->GetBinContent(cfg.bg_ampl_bin) * cfg.bg_ampl_factor;
+
+                fitfunc->SetParameters(
+                    bg_ampl,
+                    cfg.bg_mean,
+                    cfg.bg_sigma,
+                    MM_raw[q][w]->GetMaximum(),
+                    cfg.signal_mean,
+                    cfg.signal_sigma,
+                    cfg.signal_tail
+                );
+
+                MM_raw[q][w]->Fit(fitfunc, "R");
+
+                TF1* bg = new TF1(
+                    Form("background_q%d_w%d", q, w),
+                    background,
+                    cfg.xmin,
+                    current_xmax,
+                    3
+                );
+
+                bg->SetParameters(
+                    fitfunc->GetParameter(0),
+                    fitfunc->GetParameter(1),
+                    fitfunc->GetParameter(2)
+                );
+
+                N_bg = bg->Integral(
+                    cfg.bg_integral_xmin,
+                    cfg.bg_integral_xmax
+                ) * cfg.bin_width_factor;
+
+                delete bg;
+                delete fitfunc;
+            }
+
+            intergral_background[q].push_back(N_bg);
+            intergral_background_error[q].push_back(sqrt(N_bg));
+            w_bg_fit[q].push_back(w);
+        }
+    }
+}
+
+void ExtrapolateBackground(
+    std::vector<double>* intergral_background,
+    std::vector<double>* intergral_background_error,
+    std::vector<int>* w_bg_fit,
+    const BackgroundFitConfig& cfg,
+    const TString& pdfFileName)
+{
+    TCanvas* canvas_fit_bg = new TCanvas(
+        "canvas_fit_bg",
+        "Fit bg",
+        800,
+        600
+    );
+
+    canvas_fit_bg->Print(pdfFileName + "[");
+
+    for (int q = cfg.q_min; q <= cfg.q_max; ++q)
+    {
+        // Q2 range
+        // double Q2_vals[7] = {0.5, 0.7, 1.0, 1.4, 2.0, 3.0, 5.5}; 
+        double Q2_min_val;
+        double Q2_max_val;
+
+        if (q == 0) {
+            Q2_min_val = 0.5;
+            Q2_max_val = 0.7;
+        }
+        else if (q == 1) {
+            Q2_min_val = 0.7;
+            Q2_max_val = 1.0;
+        }
+        else if (q == 2) {
+            Q2_min_val = 1.0;
+            Q2_max_val = 1.4;
+        }
+        else if (q == 3) {
+            Q2_min_val = 1.4;
+            Q2_max_val = 2.0;
+        }
+        else if (q == 4) {
+            Q2_min_val = 2.0;
+            Q2_max_val = 3.0;
+        }
+        else {
+            Q2_min_val = 3.0;
+            Q2_max_val = 5.5;
+        }
+
+        TString namegraph = Form(
+            "Background VS W_bin for Q^{2} in [%g, %g] GeV^{2}; W bin number; BG",
+            Q2_min_val,
+            Q2_max_val
+        );
+
+        TGraphErrors* graph_fit_bg = new TGraphErrors(
+            intergral_background[q].size(),
+            w_bg_fit[q].data(),
+            intergral_background[q].data(),
+            nullptr,
+            intergral_background_error[q].data()
+        );
+
+        graph_fit_bg->SetTitle(namegraph);
+        graph_fit_bg->SetMinimum(0);
+        graph_fit_bg->SetMarkerSize(10.0);
+        graph_fit_bg->GetXaxis()->SetNdivisions(20, kTRUE);
+
+        int w_reper = cfg.w_fit_min;
+
+        if (q == 4 || q == 5)
+            w_reper = cfg.w_reper_q45;
+
+        // Quadratic function
+        TF1* fitFunction = new TF1(
+            Form("fitFunction_q%d", q),
+            Form(
+                "[0]*(x-%d)*(x-%d)+[1]*(x-%d)",
+                w_reper,
+                w_reper,
+                w_reper
+            ),
+            w_reper - 0.1,
+            cfg.w_fit_max
+        );
+
+        // Initial parameters
+        fitFunction->SetParameter(
+            0,
+            intergral_background[q][6]
+        );
+
+        fitFunction->SetParameter(1, 1);
+
+        // Fit
+        graph_fit_bg->Fit(fitFunction, "R");
+
+        graph_fit_bg->Draw("AP");
+        fitFunction->Draw("P SAME");
+
+        graph_fit_bg->GetXaxis()->SetRangeUser(0, 20);
+        graph_fit_bg->GetYaxis()->SetRangeUser(
+            0,
+            fitFunction->Eval(cfg.w_fit_max) * 1.1
+        );
+
+        // Fit information
+        TPaveText* pave = new TPaveText(
+            0.7,
+            0.4,
+            0.9,
+            0.6,
+            "NDC"
+        );
+
+        pave->SetFillColor(0);
+        pave->SetTextAlign(12);
+        pave->SetTextSize(0.03);
+
+        pave->AddText(
+            Form(
+                "A*(x - %d)^{2}+B*(x-%d)",
+                w_reper,
+                w_reper
+            )
+        );
+
+        pave->AddText("Fit results:");
+        pave->AddText(
+            Form("   A = %.5f", fitFunction->GetParameter(0))
+        );
+        pave->AddText(
+            Form("   B = %.5f", fitFunction->GetParameter(1))
+        );
+
+        pave->Draw("SAME");
+
+        // Extrapolation
+        for (int w = 0; w < cfg.bg_fit_start - w_reper; ++w)
+        {
+            intergral_background[q][w] =
+                fitFunction->Eval(
+                    w_reper + w + 0.01
+                );
+        }
+
+        canvas_fit_bg->Update();
+        canvas_fit_bg->Print(pdfFileName);
+
+        delete pave;
+        delete fitFunction;
+        delete graph_fit_bg;
+    }
+
+    canvas_fit_bg->Print(pdfFileName + "]");
+    delete canvas_fit_bg;
+}
+
 void yields_pdf(void) 
 {
 	gROOT->SetBatch(kTRUE); 
@@ -90,96 +364,15 @@ void yields_pdf(void)
 
 /////////////////////////////////////////////////////////////////////// Background fit/////////////////////////////////////////////////////
 
-	int q_fin = 6;
-	int w_brink = 64;
+    BackgroundFitConfig missing_pip_bg_cfg;
 
-	for (int q = 0; q < q_fin; ++q) 
-    {
-        if(q == 5) w_brink = 37;
-	    if(q == 4) w_brink = 56;
-	
-	    for (int w = 0; w < w_brink; ++w) 
-        {
-	        MM_raw[q][w] -> SetStats(kFALSE);  // Don't display stats
-
-	        double h_raw = MM_raw[q][w] -> GetMaximum();
-	        double xmin, xmax;
-
-	        xmin = -0.2;
-
-	        if(w < 10)          xmax = 0.15;
-	        else if(w < 17)     xmax = 0.25;	        
-	        else                xmax = 0.4;
-	        
-	
-            double mean = 0.0196;
-            double sigma = 0.03;
-            double tail = 0.02;
-            double b_raw = MM_raw[q][w] -> GetBinContent(25) * 0.3;
-
-	        MM_raw[q][w] -> GetYaxis() -> SetRangeUser(0, h_raw * 1.05);
-
-            double N;
-            int w_reper = 8;
-            if(q == 4 ||q == 5) w_reper = 3;
-
-            if(w >= w_reper && w < 13)  
-            {    // starting from  1.6 (except in cases when q = 4 or 5) <= W < 1.725 BG exists but we cannot fit it, so we'll interpolate it in this area
-
-                intergral_background[q].push_back(0);
-                intergral_background_error[q].push_back(0);
-                w_bg_fit[q].push_back(w);
-            }
-  
-            if( w >= 13 && w <= 17 ) 
-            {   // starting from W = 1.725 BG exists
-
-                TF1 *fitfunc = new TF1("fitfunc", combined, xmin, xmax, 7);
-
-                // Set initial parameters for the background function
-                fitfunc -> SetParameter(0, b_raw);
-                //fitfunc->SetParLimits(0,b_raw*0.1,b_raw*10);
-                fitfunc -> SetParameter(1, -1);
-                //fitfunc->SetParLimits(1,-0.5, -2);
-                fitfunc -> SetParameter(2, 0.3);
-                //fitfunc->SetParLimits(2,0.15,0.4);
-
-                // Set initial parameters for the peak function
-                fitfunc -> SetParameter(3, h_raw);
-                fitfunc -> SetParameter(4, mean);
-                fitfunc -> SetParameter(5, sigma);   
-                fitfunc -> SetParameter(6, tail);
-                //fitfunc->SetParLimits(6,0.5,2);
-
-                // Fit the histogram
-                MM_raw[q][w] -> GetYaxis() -> SetRangeUser(0, h_raw * 1.05);
-                MM_raw[q][w] -> Fit(fitfunc, "R");
-
-                // Draw the histogram and fits
-                fitfunc -> SetLineColor(kMagenta);
-                fitfunc -> SetLineWidth(2);
-                fitfunc -> Draw("SAME");
-
-                TF1 *peakfunc = new TF1("peakfunc", peak, xmin, xmax, 4);
-                peakfunc -> SetParameters(fitfunc -> GetParameter(3), fitfunc -> GetParameter(4), fitfunc -> GetParameter(5), fitfunc -> GetParameter(6));
-                peakfunc -> SetLineColor(kRed);
-                peakfunc -> SetLineWidth(2);
-                peakfunc -> Draw("SAME");
-
-                TF1 *bg = new TF1("background", background, xmin, xmax, 3);
-                bg -> SetParameters(fitfunc -> GetParameter(0), fitfunc -> GetParameter(1), fitfunc -> GetParameter(2));
-                bg->SetLineColor(kBlack);
-                bg->SetLineStyle(kDashed);
-                bg->SetLineWidth(2);
-                bg->Draw("SAME");
- 
-	            int N_bg = bg -> Integral(-0.05, 0.1) * 100;
-                intergral_background[q].push_back(N_bg);
-                intergral_background_error[q].push_back(sqrt(N_bg));
-                w_bg_fit[q].push_back(w);
-            }
-        }
-    }
+    CalculateBackgroundIntegral(
+        MM_raw,
+        intergral_background,
+        intergral_background_error,
+        w_bg_fit,
+        missing_pip_bg_cfg
+    );
 
 /////////////////////////////////////////////////////////////////////////////////GRAPH BG/////////////////////////////////////////////////////////////////////////////
 
@@ -199,7 +392,7 @@ void yields_pdf(void)
 	    if(q == 5)  {Q2_min_val = 3, Q2_max_val = 5.5;}
 
 	    char namegraph[256];
-        sprintf(namegraph, "Background VS W_bin for Q2 in [%g,%g] GeV^2; W bin number; BG", Q2_min_val, Q2_max_val);
+        sprintf(namegraph, "Background VS W_bin for Q^{2} in [%g, %g] GeV^{2}; W bin number; BG", Q2_min_val, Q2_max_val);
 	
         TGraphErrors *graph_fit_bg = new TGraphErrors(intergral_background[q].size(), &w_bg_fit[q][0], &intergral_background[q][0], NULL, &intergral_background_error[q][0]);
         graph_fit_bg -> SetTitle(namegraph);
@@ -232,8 +425,8 @@ void yields_pdf(void)
         pave -> SetTextAlign(12);
         pave -> SetTextSize(0.03);
 
-        if(q !=4 && q != 5) pave->AddText(Form("A*(x - 8)^2+B*(x-8)"));        
-        if(q==4 || q==5)    pave->AddText(Form("A*(x - 3)^2+B*(x - 3)"));
+        if(q !=4 && q != 5) pave->AddText(Form("A*(x - 8)^{2}+B*(x-8)"));        
+        if(q==4 || q==5)    pave->AddText(Form("A*(x - 3)^{2}+B*(x - 3)"));
 
         pave -> AddText(Form("Fit results:"));
         pave -> AddText(Form("   A =  %.5f ", fitFunction->GetParameter(0)));
@@ -252,8 +445,8 @@ void yields_pdf(void)
 
 /////////////////////////////////////////////////////////////////////// NEW LOGNORMAL Method/////////////////////////////////////////////////////
 
-	q_fin = 6;
-	w_brink = 64;
+	int q_fin = 6;
+	int w_brink = 64;
     
 	for (int q = 0; q < q_fin; ++q) 
     {
@@ -484,91 +677,15 @@ void yields_pdf(void)
 
 /////////////////////////////////////////////////////////////////////// Background fit for MM0 case //////////////////////////////////////////////////////////////////////////////
 
-	q_fin = 6;
-	w_brink = 64;
+    BackgroundFitConfig fully_exclusive_bg_cfg;
 
-	for (int q = 0; q < q_fin; ++q) 
-    {
-	    if(q == 5)  w_brink = 37;
-	    if(q == 4)  w_brink = 56;
-
-	    for (int w = 0; w < w_brink; ++w) 
-        {
-	        MM_ann_good_4th_curve[q][w] -> SetStats(kFALSE);  // Don't display stats
-
-	        double h_raw = MM_ann_good_4th_curve[q][w] -> GetMaximum();
-	        double mean = 0.0196;
-            double sigma = 0.05;
-            double tail = 0.02;
-            double b_raw = MM_ann_good_4th_curve[q][w] -> GetBinContent(50);
-            double xmin = -0.1;
-            double xmax = 0.3;
-
-	        if(w < 10)      xmax = 0.15;           	
-	        else if(w < 17) xmax = 0.25;
-	        
-	        MM_ann_good_4th_curve[q][w] -> GetYaxis() -> SetRangeUser(0, h_raw * 1.05);
-
-            double N;
-            int w_reper = 8;
-
-            if(q == 4 ||q == 5) w_reper = 3;
-            
-            if(w >= w_reper && w < 13) 
-            {   // starting from  1.6 (except in cases when q = 4 or 5) <= W < 1.725 BG exists but we cannot fit it, so we'll interpolate it in this area
-                background_MM0[q].push_back(0);
-                background_error_MM0[q].push_back(0);
-                w_bg_fit_MM0[q].push_back(w);
-            }
- 
-            if(w >= 13 && w <= 17 ) 
-            {   // starting from W = 1.725 BG exists
-                TF1 *fitfunc = new TF1("fitfunc", combined, xmin, xmax, 7);
-
-                // Set initial parameters for the background function
-                fitfunc -> SetParameter(0, b_raw);
-                //fitfunc->SetParLimits(0,b_raw*0.1,b_raw*10);
-                fitfunc -> SetParameter(1, -1);
-                //fitfunc->SetParLimits(1,-0.5, -2);
-                fitfunc -> SetParameter(2, 0.3);
-                //fitfunc->SetParLimits(2,0.15,0.4);
-
-                // Set initial parameters for the peak function
-                fitfunc -> SetParameter(3, h_raw);
-                fitfunc -> SetParameter(4, mean);
-                fitfunc -> SetParameter(5, sigma);   
-                fitfunc -> SetParameter(6, tail);
-                //fitfunc->SetParLimits(6,0.5,2);
-
-                // Fit the histogram
-                MM_ann_good_4th_curve[q][w] -> GetYaxis() -> SetRangeUser(0, h_raw * 1.05);
-                MM_ann_good_4th_curve[q][w] -> Fit(fitfunc, "R");
-
-                // Draw the histogram and fits
-                fitfunc -> SetLineColor(kMagenta);
-                fitfunc -> SetLineWidth(2);
-                fitfunc -> Draw("SAME");
-
-                TF1 *peakfunc = new TF1("peakfunc", peak, xmin, xmax, 4);
-                peakfunc -> SetParameters(fitfunc -> GetParameter(3), fitfunc -> GetParameter(4), fitfunc -> GetParameter(5), fitfunc -> GetParameter(6));
-                peakfunc -> SetLineColor(kRed);
-                peakfunc -> SetLineWidth(2);
-                peakfunc -> Draw("SAME");
-
-                TF1 *bg = new TF1("background", background, xmin, xmax, 3);
-                bg -> SetParameters(fitfunc -> GetParameter(0), fitfunc -> GetParameter(1), fitfunc -> GetParameter(2));
-                bg -> SetLineColor(kBlack);
-                bg -> SetLineStyle(kDashed);
-                bg -> SetLineWidth(2);
-                bg -> Draw("SAME");
-
-	            int N_bg = bg -> Integral(-0.05, 0.1) * 100;
-                background_MM0[q].push_back(N_bg);
-                background_error_MM0[q].push_back(sqrt(N_bg));
-                w_bg_fit_MM0[q].push_back(w);
-            }
-        }
-    }
+    CalculateBackgroundIntegral(
+        MM_ann_good_4th_curve,
+        background_MM0,
+        background_error_MM0,
+        w_bg_fit_MM0,
+        fully_exclusive_bg_cfg
+    );
 
 //////////////////////////////////////////////////////////////////////////////////////Graph BG for MM0 case////////////////////////////////////////////////////////////////////////////////////////
 
