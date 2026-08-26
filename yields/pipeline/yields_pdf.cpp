@@ -75,20 +75,16 @@ void yields_pdf(void)
             TString mm_raw_name = Form("MM_Q2_bin=%d_W_bin=%d;1", q+1, w+1);
             MM_raw[q][w] = (TH1F*)infile_exp->Get(mm_raw_name);
 
+            TString mm_ann_name = Form("MMpiplus_from_MM0_topology_Q2_bin=%d_W_bin=%d;1", q+1, w+1);
+            MM_ann_good_4th_curve[q][w] = (TH1F*)infile_ann_good->Get(mm_ann_name);
+
             MM_my_4th_curve[q][w] = new TH1F(
                 Form("MMpiplus_with_zero_topology_BG_Q2_bin=%d_W_bin=%d", q + 1, w + 1),
                 "",
                 100, -0.3, 0.7
             );
 
-            MM_ann_good_4th_curve[q][w] = new TH1F(
-                Form("MMpiplus_from_MM0_topology_Q2_bin=%d_W_bin=%d", q + 1, w + 1),
-                "",
-                100, -0.3, 0.7
-            );
-
             MM_my_4th_curve[q][w]->SetDirectory(nullptr);
-            MM_ann_good_4th_curve[q][w]->SetDirectory(nullptr);
         }
     }
 
@@ -498,10 +494,6 @@ void yields_pdf(void)
 
 	    for (int w = 0; w < w_brink; ++w) 
         {
-	        char namehist_ann[256];
-	        sprintf(namehist_ann, "MMpiplus_from_MM0_topology_Q2_bin=%d_W_bin=%d", q+1, w+1);
-
-	        MM_ann_good_4th_curve[q][w] = (TH1F*)infile_ann_good -> Get(Form(namehist_ann));
 	        MM_ann_good_4th_curve[q][w] -> SetStats(kFALSE);  // Don't display stats
 
 	        double h_raw = MM_ann_good_4th_curve[q][w] -> GetMaximum();
@@ -575,8 +567,6 @@ void yields_pdf(void)
                 background_error_MM0[q].push_back(sqrt(N_bg));
                 w_bg_fit_MM0[q].push_back(w);
             }
-
-            delete MM_ann_good_4th_curve[q][w];
         }
     }
 
@@ -688,10 +678,6 @@ void yields_pdf(void)
 	        MM_my_4th_curve[q][w] = (TH1F*)infile_exp -> Get(Form(namehist_raw));
 	        MM_my_4th_curve[q][w] -> SetStats(kFALSE);  // Don't display stats
 
-	        char namehist_ann[256];
-	        sprintf(namehist_ann, "MMpiplus_from_MM0_topology_Q2_bin=%d_W_bin=%d", q + 1, w + 1);
-
-	        MM_ann_good_4th_curve[q][w] = (TH1F*)infile_ann_good -> Get(Form(namehist_ann));
 	        MM_ann_good_4th_curve[q][w] -> SetStats(kFALSE);  // Don't display stats
 
 	        double scale_coef = MM_my_4th_curve[q][w] -> Integral() / MM_ann_good_4th_curve[q][w] -> Integral();
@@ -859,7 +845,6 @@ void yields_pdf(void)
             canvas -> Print(pdfFileName);
 
             delete MM_my_4th_curve[q][w];
-            delete MM_ann_good_4th_curve[q][w];
         }
 
         canvas -> Print(pdfFileName + "]"); // Закрываем текущий PDF-файл
