@@ -61,41 +61,36 @@ void yields_pdf(void)
 	std::vector<double> w_bg_fit[6];
 	std::vector<double> w_bg_fit_MM0[6];
 
-	TH1F *MM_raw[12][100];
-	for (int q = 0; q < 6; ++q) 
-    {
-	    for (int w = 0; w < 100; ++w) 
-        {
-	        char namehist[256];
-	        sprintf(namehist, "MMpiplus_Q2_bin=%d_W_bin=%d", q+1, w+1);
-	        MM_raw[q][w] = new TH1F(namehist, namehist, 100, -0.3, 0.7);
-	    }
-	}
+    TFile *infile_exp = TFile::Open("interim/mm_pip_hists_m_pip.root");
+    TFile *infile_ann_good = TFile::Open("interim/mm_pip_hists_m_0.root");
 
-	TH1F *MM_my_4th_curve[12][100];
-	for (int q = 0; q < 6; ++q) 
+    TH1F *MM_raw[12][100];
+    TH1F *MM_my_4th_curve[12][100];
+    TH1F *MM_ann_good_4th_curve[12][100];
+
+    for (int q = 0; q < 6; ++q)
     {
         for (int w = 0; w < 100; ++w)
         {
-		    char namehist[256];
-		    sprintf(namehist, "MMpiplus_with_zero_topology_BG_Q2_bin=%d_W_bin=%d", q+1, w+1);
-		    MM_my_4th_curve[q][w] = new TH1F(namehist, namehist, 100, -0.3, 0.7);
-		}
+            TString mm_raw_name = Form("MM_Q2_bin=%d_W_bin=%d;1", q+1, w+1);
+            MM_raw[q][w] = (TH1F*)infile_exp->Get(mm_raw_name);
+
+            MM_my_4th_curve[q][w] = new TH1F(
+                Form("MMpiplus_with_zero_topology_BG_Q2_bin=%d_W_bin=%d", q + 1, w + 1),
+                "",
+                100, -0.3, 0.7
+            );
+
+            MM_ann_good_4th_curve[q][w] = new TH1F(
+                Form("MMpiplus_from_MM0_topology_Q2_bin=%d_W_bin=%d", q + 1, w + 1),
+                "",
+                100, -0.3, 0.7
+            );
+
+            MM_my_4th_curve[q][w]->SetDirectory(nullptr);
+            MM_ann_good_4th_curve[q][w]->SetDirectory(nullptr);
+        }
     }
-
-	TH1F *MM_ann_good_4th_curve[12][100];
-	for (int q = 0; q < 6; ++q) 
-    {
-	    for (int w = 0; w < 100; ++w) 
-        {
-		    char namehist[256];
-		    sprintf(namehist, "MMpiplus_from_MM0_topology_Q2_bin=%d_W_bin=%d", q+1, w+1);
-		    MM_ann_good_4th_curve[q][w] = new TH1F(namehist, namehist, 100, -0.3, 0.7);
-	    }
-	}
-
-	TFile *infile_exp = TFile::Open("interim/mm_pip_hists_m_pip.root"); // 1 method
-	TFile *infile_ann_good = TFile::Open("interim/mm_pip_hists_m_0.root"); // 4th method
 
 /////////////////////////////////////////////////////////////////////// Background fit/////////////////////////////////////////////////////
 
@@ -109,11 +104,6 @@ void yields_pdf(void)
 	
 	    for (int w = 0; w < w_brink; ++w) 
         {
-
-	        char namehist_raw[256];
-	        sprintf(namehist_raw, "MM_Q2_bin=%d_W_bin=%d;1", q+1, w+1);
-
-	        MM_raw[q][w] = (TH1F*)infile_exp -> Get(Form(namehist_raw));
 	        MM_raw[q][w] -> SetStats(kFALSE);  // Don't display stats
 
 	        double h_raw = MM_raw[q][w] -> GetMaximum();
@@ -192,8 +182,6 @@ void yields_pdf(void)
                 intergral_background_error[q].push_back(sqrt(N_bg));
                 w_bg_fit[q].push_back(w);
             }
-
-            delete MM_raw[q][w];
         }
     }
 
@@ -298,10 +286,10 @@ void yields_pdf(void)
 
 	    for (int w = 0; w < w_brink; ++w) 
         {
-	        char namehist_raw[256];
-	        sprintf(namehist_raw, "MM_Q2_bin=%d_W_bin=%d;1", q+1, w+1);
+	        // char namehist_raw[256];
+	        // sprintf(namehist_raw, "MM_Q2_bin=%d_W_bin=%d;1", q+1, w+1);
 
-	        MM_raw[q][w] = (TH1F*)infile_exp -> Get(Form(namehist_raw));
+	        // MM_raw[q][w] = (TH1F*)infile_exp -> Get(Form(namehist_raw));
 	        MM_raw[q][w] -> SetStats(kFALSE);  // Don't display stats
 
 	        float w_min_val = 1.4 + w * 0.025;
@@ -491,7 +479,7 @@ void yields_pdf(void)
 	        canvas -> Update();
             canvas -> Print(pdfFileName);
 
-            delete MM_raw[q][w];
+            // delete MM_raw[q][w];
         }
 
         canvas -> Print(pdfFileName + "]"); // Закрываем текущий PDF-файл
