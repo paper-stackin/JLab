@@ -35,6 +35,7 @@ struct BackgroundFitConfig
 {
     int q_min = 0;
     int q_max = 5;
+    double Q2_vals[7] = {0.5, 0.7, 1.0, 1.4, 2.0, 3.0, 5.5};
 
     int w_fit_min = 8;
     int w_fit_max = 17;
@@ -151,7 +152,7 @@ void CalculateBackgroundIntegral(
 void ExtrapolateBackground(
     std::vector<double>* intergral_background,
     std::vector<double>* intergral_background_error,
-    std::vector<int>* w_bg_fit,
+    std::vector<double>* w_bg_fit,
     const BackgroundFitConfig& cfg,
     const TString& pdfFileName)
 {
@@ -167,34 +168,8 @@ void ExtrapolateBackground(
     for (int q = cfg.q_min; q <= cfg.q_max; ++q)
     {
         // Q2 range
-        // double Q2_vals[7] = {0.5, 0.7, 1.0, 1.4, 2.0, 3.0, 5.5}; 
-        double Q2_min_val;
-        double Q2_max_val;
-
-        if (q == 0) {
-            Q2_min_val = 0.5;
-            Q2_max_val = 0.7;
-        }
-        else if (q == 1) {
-            Q2_min_val = 0.7;
-            Q2_max_val = 1.0;
-        }
-        else if (q == 2) {
-            Q2_min_val = 1.0;
-            Q2_max_val = 1.4;
-        }
-        else if (q == 3) {
-            Q2_min_val = 1.4;
-            Q2_max_val = 2.0;
-        }
-        else if (q == 4) {
-            Q2_min_val = 2.0;
-            Q2_max_val = 3.0;
-        }
-        else {
-            Q2_min_val = 3.0;
-            Q2_max_val = 5.5;
-        }
+        double Q2_min_val = cfg.Q2_vals[q];
+        double Q2_max_val = cfg.Q2_vals[q + 1];
 
         TString namegraph = Form(
             "Background VS W_bin for Q^{2} in [%g, %g] GeV^{2}; W bin number; BG",
@@ -234,11 +209,7 @@ void ExtrapolateBackground(
         );
 
         // Initial parameters
-        fitFunction->SetParameter(
-            0,
-            intergral_background[q][6]
-        );
-
+        fitFunction->SetParameter(0, intergral_background[q][6]);
         fitFunction->SetParameter(1, 1);
 
         // Fit
@@ -248,32 +219,18 @@ void ExtrapolateBackground(
         fitFunction->Draw("P SAME");
 
         graph_fit_bg->GetXaxis()->SetRangeUser(0, 20);
-        graph_fit_bg->GetYaxis()->SetRangeUser(
-            0,
-            fitFunction->Eval(cfg.w_fit_max) * 1.1
-        );
+        graph_fit_bg->GetYaxis()->SetRangeUser(0, fitFunction->Eval(cfg.w_fit_max) * 1.1);
 
         // Fit information
-        TPaveText* pave = new TPaveText(
-            0.7,
-            0.4,
-            0.9,
-            0.6,
-            "NDC"
-        );
+        TPaveText* pave = new TPaveText(0.7, 0.4, 0.9, 0.6, "NDC");
 
         pave->SetFillColor(0);
         pave->SetTextAlign(12);
         pave->SetTextSize(0.03);
 
         pave->AddText(
-            Form(
-                "A*(x - %d)^{2}+B*(x-%d)",
-                w_reper,
-                w_reper
-            )
+            Form("A*(x - %d)^{2}+B*(x-%d)", w_reper, w_reper)
         );
-
         pave->AddText("Fit results:");
         pave->AddText(
             Form("   A = %.5f", fitFunction->GetParameter(0))
@@ -374,74 +331,13 @@ void yields_pdf(void)
         missing_pip_bg_cfg
     );
 
-/////////////////////////////////////////////////////////////////////////////////GRAPH BG/////////////////////////////////////////////////////////////////////////////
-
-    TCanvas *canvas_fit_bg = new TCanvas("canvas_fit_bg", "Fit bg", 800, 600);
-    TString pdfFileName_bg = Form("results/extrapolating_bg.pdf");  
-    canvas_fit_bg -> Print(pdfFileName_bg + "[");
-
-    for (int q = 0; q < 6; ++q) 
-    {
-	    double Q2_min_val, Q2_max_val;
-
-	    if(q == 0)  {Q2_min_val = 0.5, Q2_max_val = 0.7;}
-	    if(q == 1)  {Q2_min_val = 0.7, Q2_max_val = 1;}
-	    if(q == 2)  {Q2_min_val = 1, Q2_max_val = 1.4;}
-	    if(q == 3)  {Q2_min_val = 1.4, Q2_max_val = 2;}
-	    if(q == 4)  {Q2_min_val = 2, Q2_max_val = 3;}
-	    if(q == 5)  {Q2_min_val = 3, Q2_max_val = 5.5;}
-
-	    char namegraph[256];
-        sprintf(namegraph, "Background VS W_bin for Q^{2} in [%g, %g] GeV^{2}; W bin number; BG", Q2_min_val, Q2_max_val);
-	
-        TGraphErrors *graph_fit_bg = new TGraphErrors(intergral_background[q].size(), &w_bg_fit[q][0], &intergral_background[q][0], NULL, &intergral_background_error[q][0]);
-        graph_fit_bg -> SetTitle(namegraph);
-        graph_fit_bg -> SetMinimum(0);
-        graph_fit_bg -> SetMarkerSize(10.0);
-
-        int w_reper = 8;
-        if(q == 4 || q == 5)    w_reper = 3;
-
-        TF1 *fitFunction = new TF1("fitFunction", "[0]*(x-8)*(x-8)+[1]*(x-8)", w_reper - 0.1, 17);
-        if(q == 4 || q == 5)    fitFunction = new TF1("fitFunction", "[0]*(x-3)*(x-3)+[1]*(x-3)", w_reper - 0.1, 17);
-        
-
-        // Устанавливаем начальные значения параметров
-        fitFunction -> SetParameter(0, intergral_background[q][6]);  
-        fitFunction -> SetParameter(1, 1);   
-        //fitFunction->SetParameter(2, 1);  
-
-        graph_fit_bg -> GetXaxis() -> SetNdivisions(20, kTRUE);
-        graph_fit_bg -> Fit(fitFunction, "R"); // "R" означает, что мы хотим использовать график как "range" для подгонки
-        graph_fit_bg -> Draw("AP");
-
-        fitFunction -> Draw("P SAME");
-
-        graph_fit_bg -> GetXaxis() -> SetRangeUser(0, 20); 
-        graph_fit_bg -> GetYaxis() -> SetRangeUser(0, fitFunction -> Eval(17) * 1.1);  
-
-        TPaveText* pave = new TPaveText(0.7, 0.4, 0.9, 0.6, "NDC");
-        pave -> SetFillColor(0);
-        pave -> SetTextAlign(12);
-        pave -> SetTextSize(0.03);
-
-        if(q !=4 && q != 5) pave->AddText(Form("A*(x - 8)^{2}+B*(x-8)"));        
-        if(q==4 || q==5)    pave->AddText(Form("A*(x - 3)^{2}+B*(x - 3)"));
-
-        pave -> AddText(Form("Fit results:"));
-        pave -> AddText(Form("   A =  %.5f ", fitFunction->GetParameter(0)));
-        pave -> AddText(Form("   B =  %.5f ", fitFunction->GetParameter(1)));
-        pave -> Draw("SAME");
-
-        for (int w = 0; w < 13 - w_reper; ++w)                                 // 4,5,6,7,8,9,10,11,12  when w_reper = 4
-    	intergral_background[q][w] = fitFunction -> Eval(w_reper + w + 0.01);	   // 8,9,10,11,12 when w_reper = 8       
-
-        canvas_fit_bg -> Update();
-        canvas_fit_bg -> Print(pdfFileName_bg);
-    }
-
-    canvas_fit_bg -> Print(pdfFileName_bg + "]"); // Закрываем текущий PDF-файл
-    delete canvas_fit_bg;
+    ExtrapolateBackground(
+        intergral_background,
+        intergral_background_error,
+        w_bg_fit,
+        missing_pip_bg_cfg,
+        "results/extrapolating_bg.pdf"
+    );
 
 /////////////////////////////////////////////////////////////////////// NEW LOGNORMAL Method/////////////////////////////////////////////////////
 
@@ -475,10 +371,6 @@ void yields_pdf(void)
 
 	    for (int w = 0; w < w_brink; ++w) 
         {
-	        // char namehist_raw[256];
-	        // sprintf(namehist_raw, "MM_Q2_bin=%d_W_bin=%d;1", q+1, w+1);
-
-	        // MM_raw[q][w] = (TH1F*)infile_exp -> Get(Form(namehist_raw));
 	        MM_raw[q][w] -> SetStats(kFALSE);  // Don't display stats
 
 	        float w_min_val = 1.4 + w * 0.025;
@@ -667,8 +559,6 @@ void yields_pdf(void)
 
 	        canvas -> Update();
             canvas -> Print(pdfFileName);
-
-            // delete MM_raw[q][w];
         }
 
         canvas -> Print(pdfFileName + "]"); // Закрываем текущий PDF-файл
@@ -687,75 +577,13 @@ void yields_pdf(void)
         fully_exclusive_bg_cfg
     );
 
-//////////////////////////////////////////////////////////////////////////////////////Graph BG for MM0 case////////////////////////////////////////////////////////////////////////////////////////
-
-    TCanvas *canvas_fit_bg_MM0 = new TCanvas("canvas_fit_bg_MM0", "Fit bg MM0", 800, 600);
-    TString pdfFileName_bg_MM0 = Form("results/extrapolating_bg_MM0.pdf");  
-    canvas_fit_bg_MM0->Print(pdfFileName_bg_MM0 + "[");
-
-    for (int q = 0; q < 6; ++q) 
-    {
-	    double Q2_min_val, Q2_max_val;
-
-	    if(q == 0)  {Q2_min_val = 0.5, Q2_max_val = 0.7;}
-	    if(q == 1)  {Q2_min_val = 0.7, Q2_max_val = 1;}
-	    if(q == 2)  {Q2_min_val = 1, Q2_max_val = 1.4;}
-	    if(q == 3)  {Q2_min_val = 1.4, Q2_max_val = 2;}
-	    if(q == 4)  {Q2_min_val = 2, Q2_max_val = 3;}
-	    if(q == 5)  {Q2_min_val = 3, Q2_max_val = 5.5;}
-
-        char namegraph_MM0[256];
-        sprintf(namegraph_MM0, "Background from MM0 topology VS W_bin for Q2 in [%g,%g] GeV^2; W bin number; BG", Q2_min_val, Q2_max_val);
-	
-        TGraphErrors *graph_fit_bg_MM0 = new TGraphErrors(background_MM0[q].size(), &w_bg_fit_MM0[q][0], &background_MM0[q][0], NULL, &background_error_MM0[q][0]);
-        graph_fit_bg_MM0 -> SetTitle(namegraph_MM0);
-        graph_fit_bg_MM0 -> SetMinimum(0);
-        graph_fit_bg_MM0 -> SetMarkerSize(10.0);
-
-        int w_reper = 8;
-
-        if(q==4 || q==5)    w_reper = 3;      
-
-        TF1 *fitFunction = new TF1("fitFunction", "[0]*(x-8)*(x-8)+[1]*(x-8)", w_reper - 0.1, 17);
-
-        if(q==4 || q==5)    fitFunction = new TF1("fitFunction", "[0]*(x-3)*(x-3)+[1]*(x-3)", w_reper-0.1, 17);
-        
-        // Устанавливаем начальные значения параметров
-        fitFunction -> SetParameter(0, background_MM0[q][6]);  
-        fitFunction -> SetParameter(1, 1);   
-        //fitFunction->SetParameter(2, 1);  
-
-        graph_fit_bg_MM0 -> GetXaxis() -> SetNdivisions(20, kTRUE);
-        graph_fit_bg_MM0 -> Fit(fitFunction, "R"); // "R" означает, что мы хотим использовать график как "range" для подгонки
-        graph_fit_bg_MM0 -> Draw("AP");
-
-        fitFunction -> Draw("P SAME");
-
-        graph_fit_bg_MM0 -> GetXaxis() -> SetRangeUser(0, 20); 
-        graph_fit_bg_MM0 -> GetYaxis() -> SetRangeUser(0, fitFunction -> Eval(17) * 1.1);  
-
-        TPaveText* pave = new TPaveText(0.7, 0.4, 0.9, 0.6, "NDC");
-        pave -> SetFillColor(0);
-        pave -> SetTextAlign(12);
-        pave -> SetTextSize(0.03);
-
-        if(q != 4 && q != 5)    pave -> AddText(Form("A*(x - 8)^2+B*(x-8)"));        
-        if(q == 4 || q == 5)    pave->AddText(Form("A*(x - 3)^2+B*(x - 3)"));
-        
-        pave -> AddText(Form("Fit results:"));
-        pave -> AddText(Form("   A =  %.5f ", fitFunction -> GetParameter(0)));
-        pave -> AddText(Form("   B =  %.5f ", fitFunction -> GetParameter(1)));
-        pave -> Draw("SAME");
-
-        for (int w = 0; w < 13 - w_reper; ++w)                             // 4,5,6,7,8,9,10,11,12  when w_reper = 4
-    	background_MM0[q][w] = fitFunction -> Eval(w_reper + w + 0.01);	   // 8,9,10,11,12 when w_reper = 8
-        
-        canvas_fit_bg_MM0 -> Update();
-        canvas_fit_bg_MM0 -> Print(pdfFileName_bg_MM0);
-    }
-
-    canvas_fit_bg_MM0 -> Print(pdfFileName_bg_MM0 + "]"); // Закрываем текущий PDF-файл
-    delete canvas_fit_bg_MM0;
+    ExtrapolateBackground(
+        background_MM0,
+        background_error_MM0,
+        w_bg_fit_MM0,
+        fully_exclusive_bg_cfg,
+        "results/extrapolating_bg_MM0.pdf"
+    );
 
 // ////////////////////////////////////////////////////////////////////////////////4th method - scaling MM0 BG/////////////////////////////////////////////////////////////////////
 
