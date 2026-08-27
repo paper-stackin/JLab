@@ -68,7 +68,7 @@ struct BackgroundFitConfig
 };
 
 void CalculateBackgroundIntegral(
-    TH1F* MM_raw[12][100],
+    TH1F* hist[12][100],
     std::vector<double>* intergral_background,
     std::vector<double>* intergral_background_error,
     std::vector<double>* w_bg_fit,
@@ -105,19 +105,19 @@ void CalculateBackgroundIntegral(
                 );
 
                 double bg_ampl =
-                    MM_raw[q][w]->GetBinContent(cfg.bg_ampl_bin) * cfg.bg_ampl_factor;
+                    hist[q][w]->GetBinContent(cfg.bg_ampl_bin) * cfg.bg_ampl_factor;
 
                 fitfunc->SetParameters(
                     bg_ampl,
                     cfg.bg_mean,
                     cfg.bg_sigma,
-                    MM_raw[q][w]->GetMaximum(),
+                    hist[q][w]->GetMaximum(),
                     cfg.signal_mean,
                     cfg.signal_sigma,
                     cfg.signal_tail
                 );
 
-                MM_raw[q][w]->Fit(fitfunc, "R");
+                hist[q][w]->Fit(fitfunc, "R");
 
                 TF1* bg = new TF1(
                     Form("background_q%d_w%d", q, w),
@@ -289,7 +289,8 @@ struct FitResult
 };
 
 void CalculateYields(
-    TH1F* MM_raw[12][100],
+    TH1F* hist_signal[12][100],
+    TH1F* hist_bg[12][100],
     std::vector<double> w_vector[6],
     std::vector<double> w_vector_error[6],
     std::vector<double> intergral_signal_excut[6],
@@ -297,21 +298,18 @@ void CalculateYields(
     std::vector<double> intergral_signal[6],
     std::vector<double> intergral_signal_error[6],
     const std::vector<double> intergral_background[6],
-    FitResult fit_results[6][100])
+    FitResult fit_results[6][100],
+    const BackgroundFitConfig& cfg)
 {
-    const double Q2_vals[7] = {
-        0.5, 0.7, 1.0, 1.4, 2.0, 3.0, 5.5
-    };
-
     const double M_prot = 0.938;
     const double E_beam = 6.535;
     const double alpha = 1.0 / 137.0;
     const double del_w = 0.025;
 
-    for (int q = 0; q < 6; ++q)
+    for (int q = cfg.q_min ; q <= cfg.q_max; ++q)
     {
-        double Q2_min_val = Q2_vals[q];
-        double Q2_max_val = Q2_vals[q + 1];
+        double Q2_min_val = cfg.Q2_vals[q];
+        double Q2_max_val = cfg.Q2_vals[q + 1];
 
         double del_q2 = Q2_max_val - Q2_min_val;
         double q2_mid_val = (Q2_max_val + Q2_min_val) / 2.0;
@@ -392,42 +390,43 @@ void CalculateYields(
             // ---------------------------------------------------------
 
             double N_ex_cut =
-                MM_raw[q][w]->Integral(25, 40);
+                hist_signal[q][w]->Integral(25, 40);
 
-            double yield_ex_cut =
-                N_ex_cut / del_q2 / del_w / flux;
+            if (intergral_signal_excut != nullptr &&
+                intergral_signal_excut_error != nullptr) 
+            {
+                double yield_ex_cut = N_ex_cut / del_q2 / del_w / flux;
+                double yield_ex_cut_error = yield_ex_cut * sqrt(
+                    pow(sqrt(N_ex_cut) / N_ex_cut, 2) + pow(delta_flux / flux, 2)
+                );
 
-            intergral_signal_excut[q].push_back(yield_ex_cut);
-
-            intergral_signal_excut_error[q].push_back(
-                yield_ex_cut *
-                sqrt(
-                    pow(sqrt(N_ex_cut) / N_ex_cut, 2)
-                    +
-                    pow(delta_flux / flux, 2)
-                )
-            );
+                intergral_signal_excut[q].push_back(yield_ex_cut);
+                intergral_signal_excut_error[q].push_back(yield_ex_cut_error);
+            }
 
             // ---------------------------------------------------------
             // Determine number of background events
             // ---------------------------------------------------------
 
             double N;
+            double scale_coef = (hist_signal[q][w] == hist_bg[q][w]) 
+                    ? 1.0 
+                    : (hist_signal[q][w]->Integral() / hist_bg[q][w]->Integral());
 
-            int w_reper = 8;
+            int w_reper = cfg.w_fit_min;
 
             if (q == 4 || q == 5)
-                w_reper = 3;
+                w_reper = cfg.w_reper_q45;
 
             if (w < w_reper)
             {
                 N = N_ex_cut;
             }
-            else if (w < 13)
+            else if (w < cfg.bg_fit_start)
             {
                 N =
                     N_ex_cut -
-                    intergral_background[q][w - w_reper];
+                    intergral_background[q][w - w_reper] * scale_coef;
             }
             else
             {
@@ -436,40 +435,39 @@ void CalculateYields(
                 // -----------------------------------------------------
 
                 double h_raw =
-                    MM_raw[q][w]->GetMaximum();
+                    hist_bg[q][w]->GetMaximum();
 
-                double xmin = -0.2;
-                double xmax;
+                double current_xmax;
 
-                if (w < 10)
-                    xmax = 0.15;
-                else if (w < 17)
-                    xmax = 0.25;
+                if (w < cfg.xmax_mid_start)
+                    current_xmax = cfg.xmax_low;
+                else if (w < cfg.xmax_high_start)
+                    current_xmax = cfg.xmax_mid;
                 else
-                    xmax = 0.4;
+                    current_xmax = cfg.xmax_high;
 
                 TF1* fitfunc = new TF1(
                     Form("fitfunc_q%d_w%d", q, w),
                     combined,
-                    xmin,
-                    xmax,
+                    cfg.xmin,
+                    current_xmax,
                     7
                 );
 
                 double b_raw =
-                    MM_raw[q][w]->GetBinContent(25) * 0.3;
+                    hist_bg[q][w]->GetBinContent(cfg.bg_ampl_bin) * cfg.bg_ampl_factor;
 
                 fitfunc->SetParameters(
                     b_raw,
-                    -1,
-                    0.3,
+                    cfg.bg_mean,
+                    cfg.bg_sigma,
                     h_raw,
-                    0.0196,
-                    0.03,
-                    0.02
+                    cfg.signal_mean,
+                    cfg.signal_sigma,
+                    cfg.signal_tail
                 );
 
-                MM_raw[q][w]->Fit(fitfunc, "R");
+                hist_bg[q][w]->Fit(fitfunc, "R");
 
                 // -----------------------------------------------------
                 // Save fit parameters
@@ -521,8 +519,8 @@ void CalculateYields(
                 result.signal_tail_error =
                     fitfunc->GetParError(6);
 
-                result.xmin = xmin;
-                result.xmax = xmax;
+                result.xmin = cfg.xmin;
+                result.xmax = current_xmax;
 
                 // -----------------------------------------------------
                 // Background
@@ -531,8 +529,8 @@ void CalculateYields(
                 TF1* bg = new TF1(
                     Form("background_q%d_w%d", q, w),
                     background,
-                    xmin,
-                    xmax,
+                    result.xmin,
+                    result.xmax,
                     3
                 );
 
@@ -544,7 +542,7 @@ void CalculateYields(
 
                 N =
                     N_ex_cut -
-                    bg->Integral(-0.05, 0.1) * 100.0;
+                    bg->Integral(cfg.bg_integral_xmin, cfg.bg_integral_xmax) * cfg.bin_width_factor * scale_coef;
 
                 delete bg;
                 delete fitfunc;
@@ -572,7 +570,7 @@ void CalculateYields(
 }
 
 void DrawYields(
-    TH1F* MM_raw[12][100],
+    TH1F* hist[12][100],
     const FitResult fit_results[6][100],
     const char* pdfFilePrefix
 )
@@ -619,7 +617,7 @@ void DrawYields(
                 1.4 + (w + 1) * 0.025;
 
             double h_raw =
-                MM_raw[q][w]->GetMaximum();
+                hist[q][w]->GetMaximum();
 
             TString title = Form(
                 "LogNorm method Q^{2} [%g,%g] GeV^{2} "
@@ -634,18 +632,18 @@ void DrawYields(
             // Raw histogram
             // ---------------------------------------------------------
 
-            MM_raw[q][w]->SetTitle(title);
+            hist[q][w]->SetTitle(title);
 
-            MM_raw[q][w]->SetStats(kFALSE);
-            MM_raw[q][w]->SetLineColor(4);
-            MM_raw[q][w]->SetLineWidth(3);
+            hist[q][w]->SetStats(kFALSE);
+            hist[q][w]->SetLineColor(4);
+            hist[q][w]->SetLineWidth(3);
 
-            MM_raw[q][w]->GetYaxis()->SetRangeUser(
+            hist[q][w]->GetYaxis()->SetRangeUser(
                 0,
                 h_raw * 1.05
             );
 
-            MM_raw[q][w]->Draw();
+            hist[q][w]->Draw();
 
             // ---------------------------------------------------------
             // Draw fit
@@ -723,9 +721,9 @@ void DrawYields(
                 // -----------------------------------------------------
 
                 TLine* l_3 = new TLine(
-                    MM_raw[q][w]->GetMaximumBin() * 0.01 - 0.3,
+                    hist[q][w]->GetMaximumBin() * 0.01 - 0.3,
                     0,
-                    MM_raw[q][w]->GetMaximumBin() * 0.01 - 0.3,
+                    hist[q][w]->GetMaximumBin() * 0.01 - 0.3,
                     h_raw
                 );
 
@@ -752,7 +750,7 @@ void DrawYields(
                 pave->AddText(
                     Form(
                         "Total events: %.0f",
-                        MM_raw[q][w]->Integral()
+                        hist[q][w]->Integral()
                     )
                 );
 
@@ -830,7 +828,7 @@ void DrawYields(
                 legend->SetTextSize(0.02);
 
                 legend->AddEntry(
-                    MM_raw[q][w],
+                    hist[q][w],
                     "Pass2 Data",
                     "l"
                 );
@@ -900,14 +898,12 @@ void yields_pdf(void)
 	std::vector<double> intergral_signal_4th_method_MM0[6];
 	std::vector<double> intergral_signal_excut[6];
 	std::vector<double> intergral_background[6];
-	std::vector<double> intergral_MM0_background[6];
 	std::vector<double> background_MM0[6];
 
 	std::vector<double> intergral_signal_error[6];
 	std::vector<double> intergral_signal_4th_method_MM0_error[6];
 	std::vector<double> intergral_signal_excut_error[6];
 	std::vector<double> intergral_background_error[6];
-	std::vector<double> intergral_MM0_background_error[6];
 	std::vector<double> background_error_MM0[6];
 
 	std::vector<double> w_vector[6];
@@ -919,39 +915,31 @@ void yields_pdf(void)
 	std::vector<double> w_bg_fit[6];
 	std::vector<double> w_bg_fit_MM0[6];
 
-    TFile *infile_exp = TFile::Open("interim/mm_pip_hists_m_pip.root");
-    TFile *infile_ann_good = TFile::Open("interim/mm_pip_hists_m_0.root");
+    TFile *missing_pip_file = TFile::Open("interim/mm_pip_hists_m_pip.root");
+    TFile *fullly_exclusive_file = TFile::Open("interim/mm_pip_hists_m_0.root");
 
-    TH1F *MM_raw[12][100];
-    TH1F *MM_my_4th_curve[12][100];
-    TH1F *MM_ann_good_4th_curve[12][100];
+    TH1F *missing_pip_hist[12][100];
+    TH1F *fullly_exclusive_hist[12][100];
 
     for (int q = 0; q < 6; ++q)
     {
         for (int w = 0; w < 100; ++w)
         {
             TString mm_raw_name = Form("MM_Q2_bin=%d_W_bin=%d;1", q+1, w+1);
-            MM_raw[q][w] = (TH1F*)infile_exp->Get(mm_raw_name);
+            missing_pip_hist[q][w] = (TH1F*)missing_pip_file->Get(mm_raw_name);
 
-            TString mm_ann_name = Form("MMpiplus_from_MM0_topology_Q2_bin=%d_W_bin=%d;1", q+1, w+1);
-            MM_ann_good_4th_curve[q][w] = (TH1F*)infile_ann_good->Get(mm_ann_name);
-
-            MM_my_4th_curve[q][w] = new TH1F(
-                Form("MMpiplus_with_zero_topology_BG_Q2_bin=%d_W_bin=%d", q + 1, w + 1),
-                "",
-                100, -0.3, 0.7
-            );
-
-            MM_my_4th_curve[q][w]->SetDirectory(nullptr);
+            TString fullly_exclusive_name = Form("MMpiplus_from_MM0_topology_Q2_bin=%d_W_bin=%d;1", q+1, w+1);
+            fullly_exclusive_hist[q][w] = (TH1F*)fullly_exclusive_file->Get(fullly_exclusive_name);
         }
     }
 
-/////////////////////////////////////////////////////////////////////// Background fit/////////////////////////////////////////////////////
+//////////////Missing Pi+/////////////////////////////////////////////////////
 
     BackgroundFitConfig missing_pip_bg_cfg;
+    FitResult missing_pip_fit_results[6][100];
 
     CalculateBackgroundIntegral(
-        MM_raw,
+        missing_pip_hist,
         intergral_background,
         intergral_background_error,
         w_bg_fit,
@@ -966,15 +954,9 @@ void yields_pdf(void)
         "results/extrapolating_bg.pdf"
     );
 
-/////////////////////////////////////////////////////////////////////// NEW LOGNORMAL Method/////////////////////////////////////////////////////
-
-	int q_fin = 6;
-	int w_brink = 64;
-
-    FitResult fit_results[6][100];
-
     CalculateYields(
-        MM_raw,
+        missing_pip_hist,
+        missing_pip_hist,
         w_vector,
         w_vector_error,
         intergral_signal_excut,
@@ -982,17 +964,29 @@ void yields_pdf(void)
         intergral_signal,
         intergral_signal_error,
         intergral_background,
-        fit_results
+        missing_pip_fit_results,
+        missing_pip_bg_cfg
     );
 
-    DrawYields(MM_raw, fit_results, "results/LogNormalFit");
+    DrawYields(
+        missing_pip_hist, 
+        missing_pip_fit_results, 
+        "results/LogNormalFit"
+    );
 
-/////////////////////////////////////////////////////////////////////// Background fit for MM0 case //////////////////////////////////////////////////////////////////////////////
+//////////////Fully exclusive//////////////////////////////////////////////////////////////////////////////
 
     BackgroundFitConfig fully_exclusive_bg_cfg;
+    fully_exclusive_bg_cfg.signal_sigma = 0.05;
+    fully_exclusive_bg_cfg.xmin = -0.1;
+    fully_exclusive_bg_cfg.xmax_high = 0.3;
+    fully_exclusive_bg_cfg.bg_ampl_bin = 50;
+    fully_exclusive_bg_cfg.bg_ampl_factor = 1.0;
+
+    FitResult fully_exclusive_fit_results[6][100];
 
     CalculateBackgroundIntegral(
-        MM_ann_good_4th_curve,
+        fullly_exclusive_hist,
         background_MM0,
         background_error_MM0,
         w_bg_fit_MM0,
@@ -1007,218 +1001,27 @@ void yields_pdf(void)
         "results/extrapolating_bg_MM0.pdf"
     );
 
-// ////////////////////////////////////////////////////////////////////////////////4th method - scaling MM0 BG/////////////////////////////////////////////////////////////////////
+    CalculateYields(
+        missing_pip_hist,
+        fullly_exclusive_hist,
+        w_vector_MM0,
+        w_vector_MM0_error,
+        nullptr,
+        nullptr,
+        intergral_signal_4th_method_MM0,
+        intergral_signal_4th_method_MM0_error,
+        background_MM0,
+        fully_exclusive_fit_results,
+        fully_exclusive_bg_cfg
+    );
 
-	q_fin = 6;
-	w_brink = 64;
+    DrawYields(
+        fullly_exclusive_hist, 
+        fully_exclusive_fit_results, 
+        "results/MMpiplus_from_MM0_topology_fit"
+    );
 
-	for (int q = 0; q < q_fin; ++q) 
-    {
-	    // Создаем отдельный PDF-файл для каждого значения "w"
-        TCanvas *canvas = new TCanvas("canvas", "Canvas Title", 800, 600);
-        TString pdfFileName = Form("results/MMpiplus_from_MM0_topology_fit_in_Q2_bin_%d.pdf", q+1);  // Генерируем имя файла на основе q
-        canvas->Print(pdfFileName + "[");
-
-	    double Q2_min_val;
-	    double Q2_max_val;
-
-	    double del_q2;
-	    float q2_mid_val;
-
-	    if(q == 0)  {Q2_min_val = 0.5, Q2_max_val = 0.7, del_q2 = 0.2, q2_mid_val = 0.6;}
-	    if(q == 1)  {Q2_min_val = 0.7, Q2_max_val = 1, del_q2 = 0.3, q2_mid_val = 0.85;}
-	    if(q == 2)  {Q2_min_val = 1, Q2_max_val = 1.4, del_q2 = 0.4, q2_mid_val = 1.2;}
-	    if(q == 3)  {Q2_min_val = 1.4, Q2_max_val = 2, del_q2 = 0.6, q2_mid_val = 1.7;}
-	    if(q == 4)  {Q2_min_val = 2, Q2_max_val = 3, del_q2 = 1, q2_mid_val = 2.5;}
-	    if(q == 5)  {Q2_min_val = 3, Q2_max_val = 5.5, del_q2 = 2.5, q2_mid_val = 4.25;}
-
-	    if(q == 5) w_brink = 37;
-	    if(q == 4) w_brink = 56;
-
-	    double del_w = 0.025;
-
-	    for (int w = 0; w < w_brink; ++w) 
-        {      
-            char namehist_raw[256];
-	        sprintf(namehist_raw, "MM_Q2_bin=%d_W_bin=%d;1", q + 1, w + 1);
-	
-	        MM_my_4th_curve[q][w] = (TH1F*)infile_exp -> Get(Form(namehist_raw));
-	        MM_my_4th_curve[q][w] -> SetStats(kFALSE);  // Don't display stats
-
-	        MM_ann_good_4th_curve[q][w] -> SetStats(kFALSE);  // Don't display stats
-
-	        double scale_coef = MM_my_4th_curve[q][w] -> Integral() / MM_ann_good_4th_curve[q][w] -> Integral();
-
-	        float w_min_val = 1.4 + w * 0.025;
-            float w_max_val = 1.4 + (w + 1) * 0.025;
-            float w_mid_val = (w_min_val + w_max_val) / 2;
-
-            float M_prot = 0.938;
-            float E_beam = 6.535;
-            float E_prime = E_beam - (w_mid_val * w_mid_val - M_prot * M_prot + q2_mid_val) / (2 * M_prot);
-            float nu = E_beam - E_prime;
-            float sin2 = q2_mid_val / (4 * E_beam * E_prime);
-            float cos2 = 1 - sin2;
-            float tg2 = sin2 / cos2;
-            float eps = 1.0 / (1.0 + 2.0 * (1 + nu * nu / q2_mid_val) * tg2);
-            float alpha = 1.0 / 137.0;
-
-            float flux = alpha / (4 * 3.1415) * 1 / (M_prot * M_prot * E_beam * E_beam) * (w_mid_val * (w_mid_val * w_mid_val - M_prot * M_prot)) / ((1 - eps) * q2_mid_val);
-            float delta_flux = sqrt(pow(alpha / (4 * 3.1415) * 1 / (M_prot * M_prot * E_beam * E_beam) * ((3 * w_mid_val * w_mid_val - M_prot * M_prot) / (2 * q2_mid_val) - 1), 2) * pow(del_w, 2) + pow(alpha / (4 * 3.1415) * 1 / (M_prot * M_prot * E_beam * E_beam) * ((w_mid_val * w_mid_val - M_prot * M_prot) / (2 * q2_mid_val)), 2) * pow(del_q2, 2));
-
-            double h_raw = MM_ann_good_4th_curve[q][w] -> GetMaximum();
-	        double mean = 0.0196;
-            double sigma = 0.05;
-            double tail = 0.02;
-            double b_raw = MM_ann_good_4th_curve[q][w] -> GetBinContent(50);
-            double xmin = -0.1;
-            double xmax = 0.3;
-
-	        if(w<10)        xmax = 0.15;
-	        else if(w<17)   xmax = 0.25;
-	        
-            char namelabel_ann[256];
-            sprintf(namelabel_ann, "MMpiplus_from_MM0_Q2_[%g,%g]GeV^2_W_in_[%g,%g]GeV; MM_X^2, GeV^2", Q2_min_val, Q2_max_val, w_min_val, w_max_val);
-
-            MM_ann_good_4th_curve[q][w] -> SetTitle(namelabel_ann);
-            MM_ann_good_4th_curve[q][w] -> SetLineColor(4);
-	        MM_ann_good_4th_curve[q][w] -> SetLineWidth(1);
-
-	        MM_ann_good_4th_curve[q][w] -> GetYaxis() -> SetRangeUser(0, h_raw * 1.05);
-            MM_ann_good_4th_curve[q][w] -> Draw();
-            MM_ann_good_4th_curve[q][w] -> SetLineWidth(3);
-
-            w_vector_MM0[q].push_back(w_mid_val);
-            w_vector_MM0_error[q].push_back(del_w);
-
-            double N;
-            int w_reper = 8;
-
-            if(q == 4 || q == 5)    w_reper = 3;
-            
-            if(w < w_reper) 
-            {
-                N = MM_my_4th_curve[q][w] -> Integral(25, 40);
-
-                intergral_signal_4th_method_MM0[q].push_back(N / del_q2 / del_w / flux);
-                intergral_signal_4th_method_MM0_error[q].push_back(N / del_q2 / del_w / flux * sqrt(pow(sqrt(N) / N, 2) + pow(delta_flux / flux, 2)));
-    
-                TLine *l_1 = new TLine(-0.05, 0, -0.05, MM_ann_good_4th_curve[q][w] -> GetMaximum());
-	            TLine *l_2 = new TLine(0.1, 0, 0.1, MM_ann_good_4th_curve[q][w] -> GetMaximum());
-	            l_1 -> SetLineColor(kBlack);
-	            l_2 -> SetLineColor(kBlack);
-	            l_1 -> Draw("SAME");
-	            l_2 -> Draw("SAME");
-            }
-
-            else if(w >= w_reper && w < 13) 
-            {
-                N = MM_my_4th_curve[q][w] -> Integral(25, 40) - background_MM0[q][w-w_reper] * scale_coef;
-
-                intergral_signal_4th_method_MM0[q].push_back(N / del_q2 / del_w / flux);
-                intergral_signal_4th_method_MM0_error[q].push_back(N / del_q2 / del_w / flux * sqrt(pow(sqrt(N) / N, 2) + pow(delta_flux / flux, 2)));
-
-                TLine *l_1 = new TLine(-0.05, 0, -0.05, MM_ann_good_4th_curve[q][w] -> GetMaximum());
-	            TLine *l_2 = new TLine(0.1, 0, 0.1, MM_ann_good_4th_curve[q][w] -> GetMaximum());
-	            l_1 -> SetLineColor(kBlack);
-	            l_2 -> SetLineColor(kBlack);
-	            l_1 -> Draw("SAME");
-	            l_2 -> Draw("SAME");
-            }
-  
-            else 
-            {
-                TLine *l_1 = new TLine(-0.05, 0, -0.05, MM_ann_good_4th_curve[q][w] -> GetMaximum());
-	            TLine *l_2 = new TLine(0.1, 0, 0.1, MM_ann_good_4th_curve[q][w] -> GetMaximum());
-	            l_1 -> SetLineColor(kBlack);
-	            l_2 -> SetLineColor(kBlack);
-	            l_1 -> Draw("SAME");
-	            l_2 -> Draw("SAME");
-
-                TLine *l_3 = new TLine((MM_ann_good_4th_curve[q][w] -> GetMaximumBin()) * 0.01 - 0.3, 0, (MM_ann_good_4th_curve[q][w] -> GetMaximumBin()) * 0.01 - 0.3, MM_ann_good_4th_curve[q][w] -> GetMaximum());
-                l_3 -> SetLineColor(kBlack);
-	            l_3 -> Draw("SAME");
-                l_3 -> SetLineStyle(kDashed);
-
-                TF1 *fitfunc = new TF1("fitfunc", combined, xmin, xmax, 7);
-
-                // Set initial parameters for the background function
-                fitfunc -> SetParameter(0, b_raw);
-                //fitfunc->SetParLimits(0,b_raw*0.1,b_raw*10);
-                fitfunc -> SetParameter(1, -1);
-                //fitfunc->SetParLimits(1,-0.5, -2);
-                fitfunc -> SetParameter(2, 0.3);
-                //fitfunc->SetParLimits(2,0.15,0.4);
-
-                // Set initial parameters for the peak function
-                fitfunc -> SetParameter(3, h_raw);
-                fitfunc -> SetParameter(4, mean);
-                fitfunc -> SetParameter(5, sigma);   
-                fitfunc -> SetParameter(6, tail);
-                //fitfunc->SetParLimits(6,0.5,2);
-
-                // Fit the histogram
-                MM_ann_good_4th_curve[q][w] -> GetYaxis() -> SetRangeUser(0, h_raw * 1.05);
-                MM_ann_good_4th_curve[q][w] -> Fit(fitfunc, "R");             //// We are fitting the respective histogram from MMO topology! And using its BG to subtract from our topology!!!! 
-
-                // Draw the histogram and fits
-                fitfunc -> SetLineColor(kMagenta);
-                fitfunc -> SetLineWidth(2);
-                fitfunc -> Draw("SAME");
-    
-                TF1 *peakfunc = new TF1("peakfunc", peak, xmin, xmax, 4);
-                peakfunc -> SetParameters(fitfunc -> GetParameter(3), fitfunc -> GetParameter(4), fitfunc -> GetParameter(5), fitfunc -> GetParameter(6));
-                peakfunc -> SetLineColor(kRed);
-                peakfunc -> SetLineWidth(2);
-                peakfunc -> Draw("SAME");
-
-                TF1 *bg = new TF1("background", background, xmin, xmax, 3);
-                bg -> SetParameters(fitfunc -> GetParameter(0), fitfunc -> GetParameter(1), fitfunc -> GetParameter(2));
-                bg -> SetLineColor(kBlack);
-                bg -> SetLineStyle(kDashed);
-                bg -> SetLineWidth(2);
-                bg -> Draw("SAME");
-
-                TPaveText* pave = new TPaveText(0.45, 0.6, 0.88, 0.9, "NDC");
-                pave -> SetFillColor(0);
-                pave -> SetTextAlign(12);
-                pave -> SetTextSize(0.03);
-                pave -> AddText(Form("   Total events: %.0f ", MM_ann_good_4th_curve[q][w] -> Integral()));
-                pave -> AddText(Form("Fit results:"));
-                pave -> AddText(Form("   Amplitude bg: %.5f +/- %.5f", bg -> GetParameter(0), bg -> GetParError(0)));
-                pave -> AddText(Form("   Mean bg: %.5f +/- %.5f", bg -> GetParameter(1), bg -> GetParError(1)));
-                pave -> AddText(Form("   Sigma bg: %.5f +/- %.5f", bg -> GetParameter(2), bg -> GetParError(2)));
-                pave -> AddText(Form("   Amplitude signal: %.5f +/- %.5f", fitfunc -> GetParameter(3), fitfunc -> GetParError(3)));
-                pave -> AddText(Form("   Mean signal: %.5f +/- %.5f", fitfunc -> GetParameter(4), fitfunc -> GetParError(4)));
-                pave -> AddText(Form("   Sigma signal: %.5f +/- %.5f", fitfunc -> GetParameter(5), fitfunc -> GetParError(5)));
-                pave -> AddText(Form("   Rad. tail: %.5f +/- %.5f", fitfunc -> GetParameter(6), fitfunc -> GetParError(6)));
-                pave -> Draw("SAME");
-
-                TLegend* legend = new TLegend(0.6, 0.4, 0.9, 0.6);
-                legend -> SetTextSize(0.02);
-                legend -> AddEntry(MM_ann_good_4th_curve[q][w], "Pass2 Data", "l");
-                legend -> AddEntry(fitfunc, "Overall fit", "l");
-                legend -> AddEntry(peakfunc, "Signal (gaus+rad.tail)", "l");
-                legend -> AddEntry(bg, "Background (lognormal)", "l");
-                legend -> Draw("SAME");
-
-	            N = MM_my_4th_curve[q][w] -> Integral(25, 40) - (bg -> Integral(-0.05, 0.1) * 100) * scale_coef;
-
-                intergral_signal_4th_method_MM0[q].push_back(N / del_q2 / del_w / flux);
-                intergral_signal_4th_method_MM0_error[q].push_back(N / del_q2 / del_w / flux * sqrt(pow(sqrt(N) / N, 2) + pow(delta_flux / flux, 2)));
-            }
-
-            canvas -> Update();
-            canvas -> Print(pdfFileName);
-
-            delete MM_my_4th_curve[q][w];
-        }
-
-        canvas -> Print(pdfFileName + "]"); // Закрываем текущий PDF-файл
-        delete canvas;
-    }
-
-/////////////////////////////////////////////////////////////////////////////////GRAPHS/////////////////////////////////////////////////////////////////////////////
+//////////////GRAPHS/////////////////////////////////////////////////////////////////////////////
 
     TCanvas *canvas_yields = new TCanvas("canvas_yields", "Canvas Title", 800, 600);
     TString pdfFileName_graph = Form("results/Yields_in_all_Q2_bins.pdf");  // Генерируем имя файла на основе q
