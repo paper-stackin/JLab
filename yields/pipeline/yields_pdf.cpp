@@ -262,6 +262,636 @@ void ExtrapolateBackground(
     delete canvas_fit_bg;
 }
 
+struct FitResult
+{
+    bool fitted = false;
+
+    double bg_amp = 0;
+    double bg_mean = 0;
+    double bg_sigma = 0;
+
+    double bg_amp_error = 0;
+    double bg_mean_error = 0;
+    double bg_sigma_error = 0;
+
+    double signal_amp = 0;
+    double signal_mean = 0;
+    double signal_sigma = 0;
+    double signal_tail = 0;
+
+    double signal_amp_error = 0;
+    double signal_mean_error = 0;
+    double signal_sigma_error = 0;
+    double signal_tail_error = 0;
+
+    double xmin = 0;
+    double xmax = 0;
+};
+
+void CalculateYields(
+    TH1F* MM_raw[12][100],
+    std::vector<double> w_vector[6],
+    std::vector<double> w_vector_error[6],
+    std::vector<double> intergral_signal_excut[6],
+    std::vector<double> intergral_signal_excut_error[6],
+    std::vector<double> intergral_signal[6],
+    std::vector<double> intergral_signal_error[6],
+    const std::vector<double> intergral_background[6],
+    FitResult fit_results[6][100])
+{
+    const double Q2_vals[7] = {
+        0.5, 0.7, 1.0, 1.4, 2.0, 3.0, 5.5
+    };
+
+    const double M_prot = 0.938;
+    const double E_beam = 6.535;
+    const double alpha = 1.0 / 137.0;
+    const double del_w = 0.025;
+
+    for (int q = 0; q < 6; ++q)
+    {
+        double Q2_min_val = Q2_vals[q];
+        double Q2_max_val = Q2_vals[q + 1];
+
+        double del_q2 = Q2_max_val - Q2_min_val;
+        double q2_mid_val = (Q2_max_val + Q2_min_val) / 2.0;
+
+        int w_brink = 64;
+
+        if (q == 4)
+            w_brink = 56;
+        else if (q == 5)
+            w_brink = 37;
+
+        for (int w = 0; w < w_brink; ++w)
+        {
+            double w_min_val = 1.4 + w * del_w;
+            double w_max_val = 1.4 + (w + 1) * del_w;
+            double w_mid_val = (w_min_val + w_max_val) / 2.0;
+
+            // ---------------------------------------------------------
+            // Flux
+            // ---------------------------------------------------------
+
+            double E_prime =
+                E_beam -
+                (w_mid_val * w_mid_val - M_prot * M_prot + q2_mid_val)
+                / (2.0 * M_prot);
+
+            double nu = E_beam - E_prime;
+
+            double sin2 =
+                q2_mid_val / (4.0 * E_beam * E_prime);
+
+            double cos2 = 1.0 - sin2;
+            double tg2 = sin2 / cos2;
+
+            double eps =
+                1.0 /
+                (1.0 + 2.0 * (1.0 + nu * nu / q2_mid_val) * tg2);
+
+            double flux =
+                alpha / (4.0 * 3.1415)
+                * 1.0 / (M_prot * M_prot * E_beam * E_beam)
+                * (w_mid_val * (w_mid_val * w_mid_val - M_prot * M_prot))
+                / ((1.0 - eps) * q2_mid_val);
+
+            double delta_flux =
+                sqrt(
+                    pow(
+                        alpha / (4.0 * 3.1415)
+                        * 1.0 / (M_prot * M_prot * E_beam * E_beam)
+                        * (
+                            (3.0 * w_mid_val * w_mid_val - M_prot * M_prot)
+                            / (2.0 * q2_mid_val)
+                            - 1.0
+                        ),
+                        2
+                    ) * pow(del_w, 2)
+                    +
+                    pow(
+                        alpha / (4.0 * 3.1415)
+                        * 1.0 / (M_prot * M_prot * E_beam * E_beam)
+                        * (
+                            (w_mid_val * w_mid_val - M_prot * M_prot)
+                            / (2.0 * q2_mid_val)
+                        ),
+                        2
+                    ) * pow(del_q2, 2)
+                );
+
+            // ---------------------------------------------------------
+            // W vectors
+            // ---------------------------------------------------------
+
+            w_vector[q].push_back(w_mid_val);
+            w_vector_error[q].push_back(del_w);
+
+            // ---------------------------------------------------------
+            // Yield without background subtraction
+            // ---------------------------------------------------------
+
+            double N_ex_cut =
+                MM_raw[q][w]->Integral(25, 40);
+
+            double yield_ex_cut =
+                N_ex_cut / del_q2 / del_w / flux;
+
+            intergral_signal_excut[q].push_back(yield_ex_cut);
+
+            intergral_signal_excut_error[q].push_back(
+                yield_ex_cut *
+                sqrt(
+                    pow(sqrt(N_ex_cut) / N_ex_cut, 2)
+                    +
+                    pow(delta_flux / flux, 2)
+                )
+            );
+
+            // ---------------------------------------------------------
+            // Determine number of background events
+            // ---------------------------------------------------------
+
+            double N;
+
+            int w_reper = 8;
+
+            if (q == 4 || q == 5)
+                w_reper = 3;
+
+            if (w < w_reper)
+            {
+                N = N_ex_cut;
+            }
+            else if (w < 13)
+            {
+                N =
+                    N_ex_cut -
+                    intergral_background[q][w - w_reper];
+            }
+            else
+            {
+                // -----------------------------------------------------
+                // Fit
+                // -----------------------------------------------------
+
+                double h_raw =
+                    MM_raw[q][w]->GetMaximum();
+
+                double xmin = -0.2;
+                double xmax;
+
+                if (w < 10)
+                    xmax = 0.15;
+                else if (w < 17)
+                    xmax = 0.25;
+                else
+                    xmax = 0.4;
+
+                TF1* fitfunc = new TF1(
+                    Form("fitfunc_q%d_w%d", q, w),
+                    combined,
+                    xmin,
+                    xmax,
+                    7
+                );
+
+                double b_raw =
+                    MM_raw[q][w]->GetBinContent(25) * 0.3;
+
+                fitfunc->SetParameters(
+                    b_raw,
+                    -1,
+                    0.3,
+                    h_raw,
+                    0.0196,
+                    0.03,
+                    0.02
+                );
+
+                MM_raw[q][w]->Fit(fitfunc, "R");
+
+                // -----------------------------------------------------
+                // Save fit parameters
+                // -----------------------------------------------------
+
+                FitResult& result = fit_results[q][w];
+
+                result.fitted = true;
+
+                result.bg_amp =
+                    fitfunc->GetParameter(0);
+
+                result.bg_mean =
+                    fitfunc->GetParameter(1);
+
+                result.bg_sigma =
+                    fitfunc->GetParameter(2);
+
+                result.bg_amp_error =
+                    fitfunc->GetParError(0);
+
+                result.bg_mean_error =
+                    fitfunc->GetParError(1);
+
+                result.bg_sigma_error =
+                    fitfunc->GetParError(2);
+
+                result.signal_amp =
+                    fitfunc->GetParameter(3);
+
+                result.signal_mean =
+                    fitfunc->GetParameter(4);
+
+                result.signal_sigma =
+                    fitfunc->GetParameter(5);
+
+                result.signal_tail =
+                    fitfunc->GetParameter(6);
+
+                result.signal_amp_error =
+                    fitfunc->GetParError(3);
+
+                result.signal_mean_error =
+                    fitfunc->GetParError(4);
+
+                result.signal_sigma_error =
+                    fitfunc->GetParError(5);
+
+                result.signal_tail_error =
+                    fitfunc->GetParError(6);
+
+                result.xmin = xmin;
+                result.xmax = xmax;
+
+                // -----------------------------------------------------
+                // Background
+                // -----------------------------------------------------
+
+                TF1* bg = new TF1(
+                    Form("background_q%d_w%d", q, w),
+                    background,
+                    xmin,
+                    xmax,
+                    3
+                );
+
+                bg->SetParameters(
+                    result.bg_amp,
+                    result.bg_mean,
+                    result.bg_sigma
+                );
+
+                N =
+                    N_ex_cut -
+                    bg->Integral(-0.05, 0.1) * 100.0;
+
+                delete bg;
+                delete fitfunc;
+            }
+
+            // ---------------------------------------------------------
+            // Final yield
+            // ---------------------------------------------------------
+
+            double yield =
+                N / del_q2 / del_w / flux;
+
+            intergral_signal[q].push_back(yield);
+
+            intergral_signal_error[q].push_back(
+                yield *
+                sqrt(
+                    pow(sqrt(N) / N, 2)
+                    +
+                    pow(delta_flux / flux, 2)
+                )
+            );
+        }
+    }
+}
+
+void DrawYields(
+    TH1F* MM_raw[12][100],
+    const FitResult fit_results[6][100],
+    const char* pdfFilePrefix
+)
+{
+    const double Q2_vals[7] = {
+        0.5, 0.7, 1.0, 1.4, 2.0, 3.0, 5.5
+    };
+
+    for (int q = 0; q < 6; ++q)
+    {
+        double Q2_min_val = Q2_vals[q];
+        double Q2_max_val = Q2_vals[q + 1];
+
+        int w_brink = 64;
+
+        if (q == 4)
+            w_brink = 56;
+        else if (q == 5)
+            w_brink = 37;
+
+        TCanvas* canvas = new TCanvas(
+            Form("canvas_q%d", q),
+            "Canvas",
+            800,
+            600
+        );
+
+        TString pdfFileName =
+            Form(
+                // "results/LogNormalFit_in_Q2_bin_%d.pdf",
+                "%s_in_Q2_bin_%d.pdf",
+                pdfFilePrefix,
+                q + 1
+            );
+
+        canvas->Print(pdfFileName + "[");
+
+        for (int w = 0; w < w_brink; ++w)
+        {
+            double w_min_val =
+                1.4 + w * 0.025;
+
+            double w_max_val =
+                1.4 + (w + 1) * 0.025;
+
+            double h_raw =
+                MM_raw[q][w]->GetMaximum();
+
+            TString title = Form(
+                "LogNorm method Q^{2} [%g,%g] GeV^{2} "
+                "W [%g,%g] GeV; MM_X^{2}, GeV^{2}",
+                Q2_min_val,
+                Q2_max_val,
+                w_min_val,
+                w_max_val
+            );
+
+            // ---------------------------------------------------------
+            // Raw histogram
+            // ---------------------------------------------------------
+
+            MM_raw[q][w]->SetTitle(title);
+
+            MM_raw[q][w]->SetStats(kFALSE);
+            MM_raw[q][w]->SetLineColor(4);
+            MM_raw[q][w]->SetLineWidth(3);
+
+            MM_raw[q][w]->GetYaxis()->SetRangeUser(
+                0,
+                h_raw * 1.05
+            );
+
+            MM_raw[q][w]->Draw();
+
+            // ---------------------------------------------------------
+            // Draw fit
+            // ---------------------------------------------------------
+
+            const FitResult& result =
+                fit_results[q][w];
+
+            if (result.fitted)
+            {
+                TF1* fitfunc = new TF1(
+                    Form("fitfunc_draw_q%d_w%d", q, w),
+                    combined,
+                    result.xmin,
+                    result.xmax,
+                    7
+                );
+
+                fitfunc->SetParameters(
+                    result.bg_amp,
+                    result.bg_mean,
+                    result.bg_sigma,
+                    result.signal_amp,
+                    result.signal_mean,
+                    result.signal_sigma,
+                    result.signal_tail
+                );
+
+                fitfunc->SetLineColor(kMagenta);
+                fitfunc->SetLineWidth(2);
+                fitfunc->Draw("SAME");
+
+                // Signal
+                TF1* peakfunc = new TF1(
+                    Form("peakfunc_draw_q%d_w%d", q, w),
+                    peak,
+                    result.xmin,
+                    result.xmax,
+                    4
+                );
+
+                peakfunc->SetParameters(
+                    result.signal_amp,
+                    result.signal_mean,
+                    result.signal_sigma,
+                    result.signal_tail
+                );
+
+                peakfunc->SetLineColor(kRed);
+                peakfunc->SetLineWidth(2);
+                peakfunc->Draw("SAME");
+
+                // Background
+                TF1* bg = new TF1(
+                    Form("background_draw_q%d_w%d", q, w),
+                    background,
+                    result.xmin,
+                    result.xmax,
+                    3
+                );
+
+                bg->SetParameters(
+                    result.bg_amp,
+                    result.bg_mean,
+                    result.bg_sigma
+                );
+
+                bg->SetLineColor(kBlack);
+                bg->SetLineStyle(kDashed);
+                bg->SetLineWidth(2);
+                bg->Draw("SAME");
+
+                // -----------------------------------------------------
+                // Vertical line at maximum
+                // -----------------------------------------------------
+
+                TLine* l_3 = new TLine(
+                    MM_raw[q][w]->GetMaximumBin() * 0.01 - 0.3,
+                    0,
+                    MM_raw[q][w]->GetMaximumBin() * 0.01 - 0.3,
+                    h_raw
+                );
+
+                l_3->SetLineColor(kBlack);
+                l_3->SetLineStyle(kDashed);
+                l_3->Draw("SAME");
+
+                // -----------------------------------------------------
+                // Fit information
+                // -----------------------------------------------------
+
+                TPaveText* pave = new TPaveText(
+                    0.45,
+                    0.6,
+                    0.88,
+                    0.9,
+                    "NDC"
+                );
+
+                pave->SetFillColor(0);
+                pave->SetTextAlign(12);
+                pave->SetTextSize(0.03);
+
+                pave->AddText(
+                    Form(
+                        "Total events: %.0f",
+                        MM_raw[q][w]->Integral()
+                    )
+                );
+
+                pave->AddText("Fit results:");
+
+                pave->AddText(
+                    Form(
+                        "Amplitude bg: %.5f +/- %.5f",
+                        result.bg_amp,
+                        result.bg_amp_error
+                    )
+                );
+
+                pave->AddText(
+                    Form(
+                        "Mean bg: %.5f +/- %.5f",
+                        result.bg_mean,
+                        result.bg_mean_error
+                    )
+                );
+
+                pave->AddText(
+                    Form(
+                        "Sigma bg: %.5f +/- %.5f",
+                        result.bg_sigma,
+                        result.bg_sigma_error
+                    )
+                );
+
+                pave->AddText(
+                    Form(
+                        "Amplitude signal: %.5f +/- %.5f",
+                        result.signal_amp,
+                        result.signal_amp_error
+                    )
+                );
+
+                pave->AddText(
+                    Form(
+                        "Mean signal: %.5f +/- %.5f",
+                        result.signal_mean,
+                        result.signal_mean_error
+                    )
+                );
+
+                pave->AddText(
+                    Form(
+                        "Sigma signal: %.5f +/- %.5f",
+                        result.signal_sigma,
+                        result.signal_sigma_error
+                    )
+                );
+
+                pave->AddText(
+                    Form(
+                        "Rad. tail: %.5f +/- %.5f",
+                        result.signal_tail,
+                        result.signal_tail_error
+                    )
+                );
+
+                pave->Draw("SAME");
+
+                // -----------------------------------------------------
+                // Legend
+                // -----------------------------------------------------
+
+                TLegend* legend = new TLegend(
+                    0.6,
+                    0.4,
+                    0.9,
+                    0.6
+                );
+
+                legend->SetTextSize(0.02);
+
+                legend->AddEntry(
+                    MM_raw[q][w],
+                    "Pass2 Data",
+                    "l"
+                );
+
+                legend->AddEntry(
+                    fitfunc,
+                    "Overall fit",
+                    "l"
+                );
+
+                legend->AddEntry(
+                    peakfunc,
+                    "Signal (gaus+rad.tail)",
+                    "l"
+                );
+
+                legend->AddEntry(
+                    bg,
+                    "Background (lognormal)",
+                    "l"
+                );
+
+                legend->Draw("SAME");
+            }
+
+            // ---------------------------------------------------------
+            // Integration limits
+            // ---------------------------------------------------------
+
+            TLine* l_1 = new TLine(
+                -0.05,
+                0,
+                -0.05,
+                h_raw
+            );
+
+            TLine* l_2 = new TLine(
+                0.1,
+                0,
+                0.1,
+                h_raw
+            );
+
+            l_1->SetLineColor(kBlack);
+            l_2->SetLineColor(kBlack);
+
+            l_1->Draw("SAME");
+            l_2->Draw("SAME");
+
+            canvas->Update();
+            canvas->Print(pdfFileName);
+
+            // Здесь можно удалить созданные объекты,
+            // если они больше нигде не используются.
+        }
+
+        canvas->Print(pdfFileName + "]");
+        delete canvas;
+    }
+}
+
 void yields_pdf(void) 
 {
 	gROOT->SetBatch(kTRUE); 
@@ -279,9 +909,6 @@ void yields_pdf(void)
 	std::vector<double> intergral_background_error[6];
 	std::vector<double> intergral_MM0_background_error[6];
 	std::vector<double> background_error_MM0[6];
-	
-	std::vector<double> intergral_signal_old[6];
-	std::vector<double> intergral_signal_error_old[6];
 
 	std::vector<double> w_vector[6];
 	std::vector<double> w_vector_error[6];
@@ -343,227 +970,22 @@ void yields_pdf(void)
 
 	int q_fin = 6;
 	int w_brink = 64;
-    
-	for (int q = 0; q < q_fin; ++q) 
-    {
-	    // Создаем отдельный PDF-файл для каждого значения "w"
-        TCanvas *canvas = new TCanvas("canvas", "Canvas Title", 800, 600);
-        TString pdfFileName = Form("results/LogNormalFit_in_Q2_bin_%d.pdf", q+1);  // Генерируем имя файла на основе q
-        canvas -> Print(pdfFileName + "[");
 
-	    double Q2_min_val;
-	    double Q2_max_val;
+    FitResult fit_results[6][100];
 
-	    double del_q2;
-	    float q2_mid_val;
+    CalculateYields(
+        MM_raw,
+        w_vector,
+        w_vector_error,
+        intergral_signal_excut,
+        intergral_signal_excut_error,
+        intergral_signal,
+        intergral_signal_error,
+        intergral_background,
+        fit_results
+    );
 
-	    if(q == 0)  {Q2_min_val = 0.5, Q2_max_val = 0.7, del_q2 = 0.2, q2_mid_val = 0.6;}
-	    if(q == 1)  {Q2_min_val = 0.7, Q2_max_val = 1, del_q2 = 0.3, q2_mid_val = 0.85;}
-	    if(q == 2)  {Q2_min_val = 1, Q2_max_val = 1.4, del_q2 = 0.4, q2_mid_val = 1.2;}
-	    if(q == 3)  {Q2_min_val = 1.4, Q2_max_val = 2, del_q2 = 0.6, q2_mid_val = 1.7;}
-	    if(q == 4)  {Q2_min_val = 2, Q2_max_val = 3, del_q2 = 1, q2_mid_val = 2.5;}
-	    if(q == 5)  {Q2_min_val = 3, Q2_max_val = 5.5, del_q2 = 2.5, q2_mid_val = 4.25;}
-
-	    if(q == 5)  w_brink = 37;
-	    if(q == 4)  w_brink = 56;
-
-	    double del_w = 0.025;
-
-	    for (int w = 0; w < w_brink; ++w) 
-        {
-	        MM_raw[q][w] -> SetStats(kFALSE);  // Don't display stats
-
-	        float w_min_val = 1.4 + w * 0.025;
-            float w_max_val = 1.4 + (w + 1) * 0.025;
-            float w_mid_val = (w_min_val + w_max_val) / 2;
-
-            float M_prot = 0.938;
-            float E_beam = 6.535;
-            float E_prime = E_beam - (w_mid_val * w_mid_val - M_prot * M_prot + q2_mid_val) / (2 * M_prot);
-            float nu = E_beam - E_prime;
-            float sin2 = q2_mid_val / (4 * E_beam * E_prime);
-            float cos2 = 1 - sin2;
-            float tg2 = sin2 / cos2;
-            float eps = 1.0 / (1.0 + 2.0 * (1 + nu * nu / q2_mid_val) * tg2);
-            float alpha = 1.0 / 137.0;
-
-            float flux = alpha / (4 * 3.1415) * 1 / (M_prot * M_prot * E_beam * E_beam) * (w_mid_val * (w_mid_val * w_mid_val - M_prot * M_prot)) / ((1 - eps) * q2_mid_val);
-            float delta_flux = sqrt(pow(alpha / (4 * 3.1415) * 1 / (M_prot * M_prot * E_beam * E_beam) * ((3 * w_mid_val * w_mid_val - M_prot * M_prot) / (2 * q2_mid_val) - 1), 2) * pow(del_w, 2) + pow(alpha / (4 * 3.1415) * 1 / (M_prot * M_prot * E_beam * E_beam) * ((w_mid_val * w_mid_val - M_prot * M_prot) / (2 * q2_mid_val)), 2) * pow(del_q2, 2));
-
-            char namelabel_raw[256];
-            sprintf(namelabel_raw, "LogNorm_method_Q2_[%g,%g]GeV^2_W_in_[%g,%g]GeV; MM_X^2, GeV^2", Q2_min_val, Q2_max_val, w_min_val, w_max_val);
-
-            MM_raw[q][w] -> SetTitle(namelabel_raw);
-            MM_raw[q][w] -> SetLineColor(4);
-	        MM_raw[q][w] -> SetLineWidth(1);
-
-	        double h_raw = MM_raw[q][w] -> GetMaximum();
-	        double mean = 0.0196;
-            double sigma = 0.03;
-            double tail = 0.02;   
-	        double b_raw = MM_raw[q][w] -> GetBinContent(25) * 0.3;
-
-	        double xmin, xmax;
-	        xmin = -0.2;
-
-	        if(w < 10)      xmax = 0.15;
-	        else if(w < 17) xmax = 0.25;
-	        else            xmax = 0.4;	        
-
-	        MM_raw[q][w] -> GetYaxis() -> SetRangeUser(0, h_raw * 1.05);
-            MM_raw[q][w] -> Draw();
-            MM_raw[q][w] -> SetLineWidth(3);
-
-            w_vector[q].push_back(w_mid_val);
-            w_vector_error[q].push_back(del_w);
-
-            double N, N_ex_cut, N_old;
-            int w_reper = 8;
-
-            if(q == 4 || q == 5)    w_reper = 3;
-
-            if(w < w_reper) 
-            {
-                N = MM_raw[q][w] -> Integral(25, 40);
-                N_old = MM_raw[q][w] -> Integral(25, 40);
-
-                intergral_signal[q].push_back(N / del_q2 / del_w / flux);
-                intergral_signal_error[q].push_back(N / del_q2 / del_w / flux * sqrt(pow(sqrt(N) / N, 2) + pow(delta_flux / flux, 2)));
-
-                intergral_signal_old[q].push_back(N_old / del_q2 / del_w / flux);
-                intergral_signal_error_old[q].push_back(N_old / del_q2 / del_w / flux * sqrt(pow(sqrt(N_old) / N_old, 2) + pow(delta_flux / flux, 2)));
-
-                intergral_signal_excut[q].push_back(N / del_q2 /del_w / flux);
-                intergral_signal_excut_error[q].push_back(N / del_q2 / del_w / flux * sqrt(pow(sqrt(N) / N, 2) + pow(delta_flux / flux, 2)));
-
-                TLine *l_1 = new TLine(-0.05, 0, -0.05, MM_raw[q][w]->GetMaximum());
-	            TLine *l_2 = new TLine(0.1, 0, 0.1, MM_raw[q][w]->GetMaximum());
-	            l_1 -> SetLineColor(kBlack);
-	            l_2 -> SetLineColor(kBlack);
-	            l_1 -> Draw("SAME");
-	            l_2 -> Draw("SAME");
-            }
-
-            else if(w >= w_reper && w < 13 )
-            {
-                N = MM_raw[q][w] -> Integral(25, 40) - intergral_background[q][w-w_reper];
-                N_ex_cut = MM_raw[q][w] -> Integral(25,40);
-                N_old = MM_raw[q][w] -> Integral(25,40);
-
-                intergral_signal[q].push_back(N / del_q2 / del_w / flux);
-                intergral_signal_error[q].push_back(N / del_q2 / del_w / flux * sqrt(pow(sqrt(N) / N, 2) + pow(delta_flux / flux, 2)));
-
-                intergral_signal_excut[q].push_back(N_ex_cut / del_q2 / del_w / flux);
-                intergral_signal_excut_error[q].push_back(N_ex_cut / del_q2 / del_w / flux * sqrt(pow(sqrt(N_ex_cut) / N_ex_cut, 2) + pow(delta_flux / flux, 2)));
-
-                intergral_signal_old[q].push_back(N_old / del_q2 /del_w /flux);
-                intergral_signal_error_old[q].push_back(N_old / del_q2 / del_w / flux * sqrt(pow(sqrt(N_old) / N_old, 2) + pow(delta_flux / flux, 2)));
-
-                TLine *l_1 = new TLine(-0.05, 0, -0.05, MM_raw[q][w] -> GetMaximum());
-	            TLine *l_2 = new TLine(0.1, 0, 0.1, MM_raw[q][w] -> GetMaximum());
-	            l_1 -> SetLineColor(kBlack);
-	            l_2 -> SetLineColor(kBlack);
-	            l_1 -> Draw("SAME");
-	            l_2 -> Draw("SAME");
-            }
- 
-            else 
-            {
-	            N_ex_cut = MM_raw[q][w] -> Integral(25, 40);
-                intergral_signal_excut[q].push_back(N_ex_cut / del_q2 / del_w / flux);
-                intergral_signal_excut_error[q].push_back(N_ex_cut / del_q2 / del_w / flux * sqrt(pow(sqrt(N_ex_cut) / N_ex_cut, 2) + pow(delta_flux / flux, 2)));
-
-                TLine *l_1 = new TLine(-0.05, 0, -0.05, MM_raw[q][w] -> GetMaximum());
-	            TLine *l_2 = new TLine(0.1, 0, 0.1, MM_raw[q][w] -> GetMaximum());
-	            l_1 -> SetLineColor(kBlack);
-	            l_2 -> SetLineColor(kBlack);
-	            l_1 -> Draw("SAME");
-	            l_2 -> Draw("SAME");
-
-                TLine *l_3 = new TLine((MM_raw[q][w] -> GetMaximumBin()) * 0.01 - 0.3, 0, (MM_raw[q][w] -> GetMaximumBin()) * 0.01 - 0.3, MM_raw[q][w] -> GetMaximum());
-                l_3 -> SetLineColor(kBlack);
-	            l_3 -> Draw("SAME");
-                l_3 -> SetLineStyle(kDashed);
-
-                TF1 *fitfunc = new TF1("fitfunc", combined, xmin, xmax, 7);
-
-                // Set initial parameters for the background function
-                fitfunc -> SetParameter(0, b_raw);
-                //fitfunc->SetParLimits(0,b_raw*0.1,b_raw*10);
-                fitfunc -> SetParameter(1, -1);
-                //fitfunc->SetParLimits(1,-0.5, -2);
-                fitfunc -> SetParameter(2, 0.3);
-                //fitfunc->SetParLimits(2,0.15,0.4);
-
-                // Set initial parameters for the peak function
-                fitfunc -> SetParameter(3, h_raw);
-                fitfunc -> SetParameter(4, mean);
-                fitfunc -> SetParameter(5, sigma);   
-                fitfunc -> SetParameter(6, tail);
-                //fitfunc->SetParLimits(6,0.5,2);
-            
-                // Fit the histogram
-                MM_raw[q][w] -> GetYaxis() -> SetRangeUser(0, h_raw * 1.05);
-                MM_raw[q][w] -> Fit(fitfunc, "R");
-
-                // Draw the histogram and fits
-                fitfunc -> SetLineColor(kMagenta);
-                fitfunc -> SetLineWidth(2);
-                fitfunc -> Draw("SAME");
-
-                TF1 *peakfunc = new TF1("peakfunc", peak, xmin, xmax, 4);
-                peakfunc -> SetParameters(fitfunc -> GetParameter(3), fitfunc -> GetParameter(4), fitfunc -> GetParameter(5), fitfunc -> GetParameter(6));
-                peakfunc -> SetLineColor(kRed);
-                peakfunc -> SetLineWidth(2);
-                peakfunc -> Draw("SAME");
-
-                TF1 *bg = new TF1("background", background, xmin, xmax, 3);
-                bg -> SetParameters(fitfunc -> GetParameter(0), fitfunc -> GetParameter(1), fitfunc -> GetParameter(2));
-                bg -> SetLineColor(kBlack);
-                bg -> SetLineStyle(kDashed);
-                bg -> SetLineWidth(2);
-                bg -> Draw("SAME");
-
-                TPaveText* pave = new TPaveText(0.45, 0.6, 0.88, 0.9, "NDC");
-                pave -> SetFillColor(0);
-                pave -> SetTextAlign(12);
-                pave -> SetTextSize(0.03);
-                pave -> AddText(Form("   Total events: %.0f ", MM_raw[q][w] -> Integral()));
-                pave -> AddText(Form("Fit results:"));
-                pave -> AddText(Form("   Amplitude bg: %.5f +/- %.5f", bg -> GetParameter(0), bg -> GetParError(0)));
-                pave -> AddText(Form("   Mean bg: %.5f +/- %.5f", bg -> GetParameter(1), bg -> GetParError(1)));
-                pave -> AddText(Form("   Sigma bg: %.5f +/- %.5f", bg -> GetParameter(2), bg -> GetParError(2)));
-                pave -> AddText(Form("   Amplitude signal: %.5f +/- %.5f", fitfunc -> GetParameter(3), fitfunc -> GetParError(3)));
-                pave -> AddText(Form("   Mean signal: %.5f +/- %.5f", fitfunc -> GetParameter(4), fitfunc -> GetParError(4)));
-                pave -> AddText(Form("   Sigma signal: %.5f +/- %.5f", fitfunc -> GetParameter(5), fitfunc -> GetParError(5)));
-                pave -> AddText(Form("   Rad. tail: %.5f +/- %.5f", fitfunc -> GetParameter(6), fitfunc -> GetParError(6)));
-                pave -> Draw("SAME");
-
-                TLegend* legend = new TLegend(0.6, 0.4, 0.9, 0.6);
-                legend -> SetTextSize(0.02);
-                legend -> AddEntry(MM_raw[q][w], "Pass2 Data", "l");
-                legend -> AddEntry(fitfunc, "Overall fit", "l");
-                legend -> AddEntry(peakfunc, "Signal (gaus+rad.tail)", "l");
-                legend -> AddEntry(bg, "Background (lognormal)", "l");
-                legend -> Draw("SAME");
-
-	            N = MM_raw[q][w] -> Integral(25,40) - bg -> Integral(-0.05, 0.1) * 100;
-	            N_old = peakfunc -> Integral(xmin, xmax) * 100;
-
-                intergral_signal[q].push_back(N / del_q2 / del_w / flux);
-                intergral_signal_error[q].push_back(N / del_q2 / del_w / flux * sqrt(pow(sqrt(N) / N, 2) + pow(delta_flux / flux, 2)));
-
-                intergral_signal_old[q].push_back(N_old / del_q2 / del_w / flux);
-                intergral_signal_error_old[q].push_back(N_old / del_q2 / del_w / flux * sqrt(pow(sqrt(N_old) / N_old, 2) + pow(delta_flux / flux, 2)));
-            }
-
-	        canvas -> Update();
-            canvas -> Print(pdfFileName);
-        }
-
-        canvas -> Print(pdfFileName + "]"); // Закрываем текущий PDF-файл
-        delete canvas;
-    }
+    DrawYields(MM_raw, fit_results, "results/LogNormalFit");
 
 /////////////////////////////////////////////////////////////////////// Background fit for MM0 case //////////////////////////////////////////////////////////////////////////////
 
@@ -835,15 +1257,6 @@ void yields_pdf(void)
 
         mg -> Add(graph_signal_excut);
 
-        TGraphErrors *graph_signal_old = new TGraphErrors(intergral_signal_old[q].size(), &w_vector[q][0], &intergral_signal_old[q][0], NULL, &intergral_signal_error_old[q][0]);
-        graph_signal_old -> SetTitle(namegraph);
-        graph_signal_old -> SetMinimum(0);
-        graph_signal_old -> SetMarkerSize(1);
-        graph_signal_old -> SetLineColor(4);
-        graph_signal_old -> Draw("SAME");
-
-        //mg->Add(graph_signal_old);
-
         TGraphErrors *graph_signal_4 = new TGraphErrors(intergral_signal_4th_method_MM0[q].size(), &w_vector_MM0[q][0], &intergral_signal_4th_method_MM0[q][0], NULL, &intergral_signal_4th_method_MM0_error[q][0]);
         graph_signal_4 -> SetTitle(namegraph);
         graph_signal_4 -> SetMinimum(0);
@@ -865,7 +1278,6 @@ void yields_pdf(void)
         legend -> AddEntry(graph_signal, "New lognorm method", "l");
         legend -> AddEntry(graph_signal_excut, "Entries within ex.cut", "l");
         legend -> AddEntry(graph_signal_4, "Scaled bg from MM0 topology", "l");
-        //legend->AddEntry(graph_signal_old, "Old lognorm method", "l");
 
         legend->Draw("SAME");
 
