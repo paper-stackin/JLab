@@ -75,9 +75,9 @@ struct ExtrapolationResult
 };
 
 struct ExtrapolationOutput {
-    std::vector<double> integral_background;
-    std::vector<double> integral_background_error;
-    std::vector<double> w_bg_fit;
+    std::vector<std::vector<double>> integral_background;
+    std::vector<std::vector<double>> integral_background_error;
+    std::vector<std::vector<double>> w_bg_fit;
     std::vector<ExtrapolationResult> extrapolation_results; // Вместо сырого массива [6] используем вектор
 };
 
@@ -112,6 +112,9 @@ ExtrapolationOutput ExtrapolateBackground(
     const BackgroundFitConfig& cfg)
 {
     ExtrapolationOutput output;
+    output.integral_background.resize(cfg.q_max + 1);
+    output.integral_background_error.resize(cfg.q_max + 1);
+    output.w_bg_fit.resize(cfg.q_max + 1);
     output.extrapolation_results.resize(cfg.q_max + 1);
 
     for (int q = cfg.q_min; q <= cfg.q_max; ++q)
@@ -186,9 +189,9 @@ ExtrapolationOutput ExtrapolateBackground(
         graph_fit_bg->Fit(fitFunction, "RQ");
 
         // Save extrapolation parameters
-        extrapolation_results[q].A = fitFunction->GetParameter(0);
-        extrapolation_results[q].B = fitFunction->GetParameter(1);
-        extrapolation_results[q].w_reper = w_reper;
+        output.extrapolation_results[q].A = fitFunction->GetParameter(0);
+        output.extrapolation_results[q].B = fitFunction->GetParameter(1);
+        output.extrapolation_results[q].w_reper = w_reper;
 
         // Extrapolation
         for (int w = 0; w < cfg.bg_fit_start - w_reper; ++w)
@@ -203,14 +206,14 @@ ExtrapolationOutput ExtrapolateBackground(
         delete graph_fit_bg;
     }
 
-    return output
+    return output;
 }
 
 void DrawBackgroundExtrapolation(
-    const std::vector<double>* integral_background,
-    const std::vector<double>* integral_background_error,
-    const std::vector<double>* w_bg_fit,
-    const ExtrapolationResult extrapolation_results[6],
+    const std::vector<std::vector<double>> integral_background,
+    const std::vector<std::vector<double>> integral_background_error,
+    const std::vector<std::vector<double>> w_bg_fit,
+    const std::vector<ExtrapolationResult>& extrapolation_results,
     const BackgroundFitConfig& cfg,
     const TString& pdfFileName)
 {
@@ -454,7 +457,7 @@ void CalculateYields(
     TH1F* hist_signal[12][100],
     TH1F* hist_bg[12][100],
     const std::vector<std::vector<FitResult>>& fit_results,
-    const std::vector<double> integral_background[6],
+    const std::vector<std::vector<double>> integral_background,
     std::vector<double> w_vector[6],
     std::vector<double> w_vector_error[6],
     std::vector<double> intergral_signal_excut[6],
