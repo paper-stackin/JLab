@@ -1,3 +1,5 @@
+#include "yields_config.h"
+
 Double_t background(Double_t *x, Double_t *par) 
 {
 
@@ -30,42 +32,6 @@ Double_t combined(Double_t *x, Double_t *par)
 {
     return background(x, par) + peak(x, &par[3]);
 }
-
-struct BackgroundFitConfig
-{
-    int q_min = 0;
-    int q_max = 5;
-    double Q2_vals[7] = {0.5, 0.7, 1.0, 1.4, 2.0, 3.0, 5.5};
-
-    int w_fit_min = 8;
-    int w_fit_max = 17;
-
-    int w_reper_q45 = 3;
-    int bg_fit_start = 13;
-
-    double xmin = -0.2;
-
-    double xmax_low = 0.15;
-    double xmax_mid = 0.25;
-    double xmax_high = 0.4;
-
-    int xmax_mid_start = 10;
-    int xmax_high_start = 17;
-
-    double bg_mean = -1.0;
-    double bg_sigma = 0.3;
-
-    int bg_ampl_bin = 25;
-    double bg_ampl_factor = 0.3;
-
-    double signal_mean = 0.0196;
-    double signal_sigma = 0.03;
-    double signal_tail = 0.02;
-
-    double bg_integral_xmin = -0.05;
-    double bg_integral_xmax = 0.1;
-    double bin_width_factor = 100.0;
-};
 
 struct ExtrapolationResult
 {
@@ -107,9 +73,37 @@ struct FitResult
     double xmax = 0;
 };
 
+#include <vector>
+#include <TFile.h>
+#include <TH1F.h>
+#include <TString.h>
+
+std::vector<std::vector<TH1F*>> LoadHistograms(
+    TFile* infile, 
+    const char* hist_name_prefix, 
+    int q_min, int q_max, 
+    int w_min, int w_max) 
+{
+    std::vector<std::vector<TH1F*>> histograms(q_max + 1);
+
+    for (int q = q_min; q <= q_max; ++q) 
+    {
+        histograms[q].resize(w_max + 1, nullptr);
+
+        for (int w = w_min; w <= w_max; ++w) 
+        {
+            TString full_name = Form("%s_Q2_bin=%d_W_bin=%d", hist_name_prefix, q + 1, w + 1);
+            histograms[q][w] = (TH1F*)infile->Get(full_name);
+        }
+    }
+
+    return histograms;
+}
+
+
 ExtrapolationOutput ExtrapolateBackground(
     const std::vector<std::vector<FitResult>>& fit_results,
-    const BackgroundFitConfig& cfg)
+    const YieldsConfig& cfg)
 {
     ExtrapolationOutput output;
     output.integral_background.resize(cfg.q_max + 1);
@@ -214,7 +208,7 @@ void DrawBackgroundExtrapolation(
     const std::vector<std::vector<double>> integral_background_error,
     const std::vector<std::vector<double>> w_bg_fit,
     const std::vector<ExtrapolationResult>& extrapolation_results,
-    const BackgroundFitConfig& cfg,
+    const YieldsConfig& cfg,
     const TString& pdfFileName)
 {
     TCanvas* canvas_fit_bg = new TCanvas(
@@ -363,8 +357,8 @@ void DrawBackgroundExtrapolation(
 }
 
 std::vector<std::vector<FitResult>> FitBackground(
-    TH1F* hist_bg[12][100],
-    const BackgroundFitConfig& cfg)
+    const std::vector<std::vector<TH1F*>>& hist_bg,
+    const YieldsConfig& cfg)
 {
     int n_q = cfg.q_max - cfg.q_min + 1;
 
@@ -454,8 +448,8 @@ std::vector<std::vector<FitResult>> FitBackground(
 }
 
 void CalculateYields(
-    TH1F* hist_signal[12][100],
-    TH1F* hist_bg[12][100],
+    const std::vector<std::vector<TH1F*>>& hist_signal,
+    const std::vector<std::vector<TH1F*>>& hist_bg,
     const std::vector<std::vector<FitResult>>& fit_results,
     const std::vector<std::vector<double>> integral_background,
     std::vector<double> w_vector[6],
@@ -464,7 +458,7 @@ void CalculateYields(
     std::vector<double> intergral_signal_excut_error[6],
     std::vector<double> intergral_signal[6],
     std::vector<double> intergral_signal_error[6],
-    const BackgroundFitConfig& cfg)
+    const YieldsConfig& cfg)
 {
     const double M_prot = 0.938;
     const double E_beam = 6.535;
@@ -476,11 +470,9 @@ void CalculateYields(
         double Q2_min_val = cfg.Q2_vals[q];
         double Q2_max_val = cfg.Q2_vals[q + 1];
 
-        double del_q2 =
-            Q2_max_val - Q2_min_val;
+        double del_q2 = Q2_max_val - Q2_min_val;
 
-        double q2_mid_val =
-            (Q2_max_val + Q2_min_val) / 2.0;
+        double q2_mid_val = (Q2_max_val + Q2_min_val) / 2.0;
 
         int w_brink = 64;
 
@@ -491,26 +483,15 @@ void CalculateYields(
 
         for (int w = 0; w < w_brink; ++w)
         {
-            // ---------------------------------------------------------
-            // W
-            // ---------------------------------------------------------
-
-            double w_min_val =
-                1.4 + w * del_w;
-
-            double w_max_val =
-                1.4 + (w + 1) * del_w;
-
-            double w_mid_val =
-                (w_min_val + w_max_val) / 2.0;
+            //W
+            double w_min_val = 1.4 + w * del_w;
+            double w_max_val = 1.4 + (w + 1) * del_w;
+            double w_mid_val = (w_min_val + w_max_val) / 2.0;
 
             w_vector[q].push_back(w_mid_val);
             w_vector_error[q].push_back(del_w);
 
-            // ---------------------------------------------------------
-            // Flux
-            // ---------------------------------------------------------
-
+            //Flux
             double E_prime =
                 E_beam -
                 (w_mid_val * w_mid_val
@@ -574,17 +555,10 @@ void CalculateYields(
                     ) * pow(del_q2, 2)
                 );
 
-            // ---------------------------------------------------------
             // N_ex_cut from signal histogram
-            // ---------------------------------------------------------
+            double N_ex_cut = hist_signal[q][w]->Integral(25, 40);
 
-            double N_ex_cut =
-                hist_signal[q][w]->Integral(25, 40);
-
-            // ---------------------------------------------------------
             // Yield without background subtraction
-            // ---------------------------------------------------------
-
             if (intergral_signal_excut != nullptr &&
                 intergral_signal_excut_error != nullptr) 
             {
@@ -597,20 +571,14 @@ void CalculateYields(
                 intergral_signal_excut_error[q].push_back(yield_ex_cut_error);
             }
 
-            // ---------------------------------------------------------
             // Scale coefficient
-            // ---------------------------------------------------------
-
             double scale_coef =
                 (hist_signal[q][w] == hist_bg[q][w])
                     ? 1.0
                     : hist_signal[q][w]->Integral()
                       / hist_bg[q][w]->Integral();
 
-            // ---------------------------------------------------------
             // Background
-            // ---------------------------------------------------------
-
             int w_reper = cfg.w_fit_min;
 
             if (q == 4 || q == 5)
@@ -633,9 +601,7 @@ void CalculateYields(
             else
             {
                 // Background from fit
-
-                const FitResult& result =
-                    fit_results[q][w];
+                const FitResult& result = fit_results[q][w];
 
                 TF1* bg = new TF1(
                     Form("background_q%d_w%d", q, w),
@@ -662,22 +628,11 @@ void CalculateYields(
                 delete bg;
             }
 
-            // ---------------------------------------------------------
             // Signal events after background subtraction
-            // ---------------------------------------------------------
+            double N = N_ex_cut - N_bg;
 
-            double N =
-                N_ex_cut - N_bg;
-
-            // ---------------------------------------------------------
             // Final yield
-            // ---------------------------------------------------------
-
-            double yield =
-                N /
-                del_q2 /
-                del_w /
-                flux;
+            double yield = N / del_q2 / del_w / flux;
 
             intergral_signal[q].push_back(
                 yield
@@ -696,19 +651,16 @@ void CalculateYields(
 }
 
 void DrawMissingMassFit(
-    TH1F* hist[12][100],
+    const std::vector<std::vector<TH1F*>>& hist,
     const std::vector<std::vector<FitResult>>& fit_results,
-    const char* pdfFilePrefix
+    const char* pdfFilePrefix,
+    const YieldsConfig& cfg
 )
 {
-    const double Q2_vals[7] = {
-        0.5, 0.7, 1.0, 1.4, 2.0, 3.0, 5.5
-    };
-
-    for (int q = 0; q < 6; ++q)
+    for (int q = cfg.q_min; q <= cfg.q_max; ++q)
     {
-        double Q2_min_val = Q2_vals[q];
-        double Q2_max_val = Q2_vals[q + 1];
+        double Q2_min_val = cfg.Q2_vals[q];
+        double Q2_max_val = cfg.Q2_vals[q + 1];
 
         int w_brink = 64;
 
@@ -1033,32 +985,32 @@ void yields_pdf(void)
     TFile *missing_pip_file = TFile::Open("interim/mm_pip_hists_m_pip.root");
     TFile *fullly_exclusive_file = TFile::Open("interim/mm_pip_hists_m_0.root");
 
-    TH1F *missing_pip_hist[12][100];
-    TH1F *fullly_exclusive_hist[12][100];
+    int q_min = 0; int q_max = 5;
+    int w_min = 0; int w_max = 99;
 
-    for (int q = 0; q < 6; ++q)
-    {
-        for (int w = 0; w < 100; ++w)
-        {
-            TString mm_raw_name = Form("MM_Q2_bin=%d_W_bin=%d;1", q+1, w+1);
-            missing_pip_hist[q][w] = (TH1F*)missing_pip_file->Get(mm_raw_name);
+    auto missing_pip_hist = LoadHistograms(
+        missing_pip_file, 
+        "MM", 
+        q_min, q_max, w_min, w_max
+    );
 
-            TString fullly_exclusive_name = Form("MMpiplus_from_MM0_topology_Q2_bin=%d_W_bin=%d;1", q+1, w+1);
-            fullly_exclusive_hist[q][w] = (TH1F*)fullly_exclusive_file->Get(fullly_exclusive_name);
-        }
-    }
+    auto fullly_exclusive_hist = LoadHistograms(
+        fullly_exclusive_file, 
+        "MMpiplus_from_MM0_topology", 
+        q_min, q_max, w_min, w_max
+    );
 
 //////////////Missing Pi+/////////////////////////////////////////////////////
 
     std::cout << "Missing Pi+" << std::endl;
 
-    BackgroundFitConfig missing_pip_bg_cfg;
+    YieldsConfig missing_pip_cfg;
 
     std::cout << "    FitBackground" << std::endl;
 
     auto missing_pip_fit_results = FitBackground(
         missing_pip_hist,
-        missing_pip_bg_cfg
+        missing_pip_cfg
     );
 
     std::cout << "    ExtrapolateBackground" << std::endl;
@@ -1071,7 +1023,7 @@ void yields_pdf(void)
     ] = 
     ExtrapolateBackground(
         missing_pip_fit_results,
-        missing_pip_bg_cfg
+        missing_pip_cfg
     );
 
     std::cout << "    CalculateYields" << std::endl;
@@ -1087,7 +1039,7 @@ void yields_pdf(void)
         intergral_signal_excut_error,
         intergral_signal,
         intergral_signal_error,
-        missing_pip_bg_cfg
+        missing_pip_cfg
     );
 
     std::cout << "    DrawBackgroundExtrapolation" << std::endl;
@@ -1097,7 +1049,7 @@ void yields_pdf(void)
         integral_background_error,
         w_bg_fit,
         missing_pip_extrapolation_results,
-        missing_pip_bg_cfg,
+        missing_pip_cfg,
         "results/extrapolating_bg.pdf"
     );
 
@@ -1106,13 +1058,14 @@ void yields_pdf(void)
     DrawMissingMassFit(
         missing_pip_hist, 
         missing_pip_fit_results, 
-        "results/LogNormalFit"
+        "results/LogNormalFit",
+        missing_pip_cfg
     );
 
 //////////////Fully exclusive//////////////////////////////////////////////////////////////////////////////
     std::cout << "Fully exclusive" << std::endl;
 
-    BackgroundFitConfig fully_exclusive_bg_cfg;
+    YieldsConfig fully_exclusive_bg_cfg;
     fully_exclusive_bg_cfg.signal_sigma = 0.05;
     fully_exclusive_bg_cfg.xmin = -0.1;
     fully_exclusive_bg_cfg.xmax_high = 0.3;
@@ -1171,7 +1124,8 @@ void yields_pdf(void)
     DrawMissingMassFit(
         fullly_exclusive_hist, 
         fully_exclusive_fit_results, 
-        "results/MMpiplus_from_MM0_topology_fit"
+        "results/MMpiplus_from_MM0_topology_fit",
+        fully_exclusive_bg_cfg
     );
 
 //////////////GRAPHS/////////////////////////////////////////////////////////////////////////////
