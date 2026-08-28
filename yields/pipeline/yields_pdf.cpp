@@ -288,17 +288,103 @@ struct FitResult
     double xmax = 0;
 };
 
+void FitBackground(
+    TH1F* hist_bg[12][100],
+    FitResult fit_results[6][100],
+    const BackgroundFitConfig& cfg)
+{
+    for (int q = cfg.q_min; q <= cfg.q_max; ++q)
+    {
+        int w_brink = 64;
+
+        if (q == 4)
+            w_brink = 56;
+        else if (q == 5)
+            w_brink = 37;
+
+        for (int w = cfg.bg_fit_start; w < w_brink; ++w)
+        {
+            double h_raw =
+                hist_bg[q][w]->GetMaximum();
+
+            double current_xmax;
+
+            if (w < cfg.xmax_mid_start)
+                current_xmax = cfg.xmax_low;
+            else if (w < cfg.xmax_high_start)
+                current_xmax = cfg.xmax_mid;
+            else
+                current_xmax = cfg.xmax_high;
+
+            TF1* fitfunc = new TF1(
+                Form("fitfunc_q%d_w%d", q, w),
+                combined,
+                cfg.xmin,
+                current_xmax,
+                7
+            );
+
+            double b_raw =
+                hist_bg[q][w]->GetBinContent(cfg.bg_ampl_bin)
+                * cfg.bg_ampl_factor;
+
+            fitfunc->SetParameters(
+                b_raw,
+                cfg.bg_mean,
+                cfg.bg_sigma,
+                h_raw,
+                cfg.signal_mean,
+                cfg.signal_sigma,
+                cfg.signal_tail
+            );
+
+            hist_bg[q][w]->Fit(fitfunc, "R");
+
+            // ---------------------------------------------------------
+            // Save fit parameters
+            // ---------------------------------------------------------
+
+            FitResult& result = fit_results[q][w];
+
+            result.fitted = true;
+
+            result.bg_amp = fitfunc->GetParameter(0);
+            result.bg_mean = fitfunc->GetParameter(1);
+            result.bg_sigma = fitfunc->GetParameter(2);
+
+            result.bg_amp_error = fitfunc->GetParError(0);
+            result.bg_mean_error = fitfunc->GetParError(1);
+            result.bg_sigma_error = fitfunc->GetParError(2);
+
+            result.signal_amp = fitfunc->GetParameter(3);
+            result.signal_mean = fitfunc->GetParameter(4);
+            result.signal_sigma = fitfunc->GetParameter(5);
+            result.signal_tail = fitfunc->GetParameter(6);
+
+            result.signal_amp_error = fitfunc->GetParError(3);
+            result.signal_mean_error = fitfunc->GetParError(4);
+            result.signal_sigma_error = fitfunc->GetParError(5);
+            result.signal_tail_error = fitfunc->GetParError(6);
+
+            result.xmin = cfg.xmin;
+            result.xmax = current_xmax;
+
+            delete fitfunc;
+        }
+    }
+}
+
 void CalculateYields(
     TH1F* hist_signal[12][100],
     TH1F* hist_bg[12][100],
+    const FitResult fit_results[6][100],
+    const std::vector<double> intergral_background[6],
     std::vector<double> w_vector[6],
     std::vector<double> w_vector_error[6],
     std::vector<double> intergral_signal_excut[6],
     std::vector<double> intergral_signal_excut_error[6],
     std::vector<double> intergral_signal[6],
     std::vector<double> intergral_signal_error[6],
-    const std::vector<double> intergral_background[6],
-    FitResult fit_results[6][100],
     const BackgroundFitConfig& cfg)
 {
     const double M_prot = 0.938;
@@ -306,13 +392,16 @@ void CalculateYields(
     const double alpha = 1.0 / 137.0;
     const double del_w = 0.025;
 
-    for (int q = cfg.q_min ; q <= cfg.q_max; ++q)
+    for (int q = cfg.q_min; q <= cfg.q_max; ++q)
     {
         double Q2_min_val = cfg.Q2_vals[q];
         double Q2_max_val = cfg.Q2_vals[q + 1];
 
-        double del_q2 = Q2_max_val - Q2_min_val;
-        double q2_mid_val = (Q2_max_val + Q2_min_val) / 2.0;
+        double del_q2 =
+            Q2_max_val - Q2_min_val;
+
+        double q2_mid_val =
+            (Q2_max_val + Q2_min_val) / 2.0;
 
         int w_brink = 64;
 
@@ -323,9 +412,21 @@ void CalculateYields(
 
         for (int w = 0; w < w_brink; ++w)
         {
-            double w_min_val = 1.4 + w * del_w;
-            double w_max_val = 1.4 + (w + 1) * del_w;
-            double w_mid_val = (w_min_val + w_max_val) / 2.0;
+            // ---------------------------------------------------------
+            // W
+            // ---------------------------------------------------------
+
+            double w_min_val =
+                1.4 + w * del_w;
+
+            double w_max_val =
+                1.4 + (w + 1) * del_w;
+
+            double w_mid_val =
+                (w_min_val + w_max_val) / 2.0;
+
+            w_vector[q].push_back(w_mid_val);
+            w_vector_error[q].push_back(del_w);
 
             // ---------------------------------------------------------
             // Flux
@@ -333,64 +434,77 @@ void CalculateYields(
 
             double E_prime =
                 E_beam -
-                (w_mid_val * w_mid_val - M_prot * M_prot + q2_mid_val)
+                (w_mid_val * w_mid_val
+                 - M_prot * M_prot
+                 + q2_mid_val)
                 / (2.0 * M_prot);
 
             double nu = E_beam - E_prime;
 
             double sin2 =
-                q2_mid_val / (4.0 * E_beam * E_prime);
+                q2_mid_val /
+                (4.0 * E_beam * E_prime);
 
             double cos2 = 1.0 - sin2;
             double tg2 = sin2 / cos2;
 
             double eps =
                 1.0 /
-                (1.0 + 2.0 * (1.0 + nu * nu / q2_mid_val) * tg2);
+                (
+                    1.0 +
+                    2.0 * (1.0 + nu * nu / q2_mid_val) * tg2
+                );
 
             double flux =
                 alpha / (4.0 * 3.1415)
-                * 1.0 / (M_prot * M_prot * E_beam * E_beam)
-                * (w_mid_val * (w_mid_val * w_mid_val - M_prot * M_prot))
-                / ((1.0 - eps) * q2_mid_val);
+                * 1.0 /
+                  (M_prot * M_prot * E_beam * E_beam)
+                * (
+                    w_mid_val *
+                    (w_mid_val * w_mid_val - M_prot * M_prot)
+                  )
+                / (
+                    (1.0 - eps) * q2_mid_val
+                  );
 
             double delta_flux =
                 sqrt(
                     pow(
                         alpha / (4.0 * 3.1415)
-                        * 1.0 / (M_prot * M_prot * E_beam * E_beam)
+                        * 1.0 /
+                          (M_prot * M_prot * E_beam * E_beam)
                         * (
-                            (3.0 * w_mid_val * w_mid_val - M_prot * M_prot)
+                            (3.0 * w_mid_val * w_mid_val
+                             - M_prot * M_prot)
                             / (2.0 * q2_mid_val)
                             - 1.0
-                        ),
+                          ),
                         2
                     ) * pow(del_w, 2)
                     +
                     pow(
                         alpha / (4.0 * 3.1415)
-                        * 1.0 / (M_prot * M_prot * E_beam * E_beam)
+                        * 1.0 /
+                          (M_prot * M_prot * E_beam * E_beam)
                         * (
-                            (w_mid_val * w_mid_val - M_prot * M_prot)
+                            (w_mid_val * w_mid_val
+                             - M_prot * M_prot)
                             / (2.0 * q2_mid_val)
-                        ),
+                          ),
                         2
                     ) * pow(del_q2, 2)
                 );
 
             // ---------------------------------------------------------
-            // W vectors
-            // ---------------------------------------------------------
-
-            w_vector[q].push_back(w_mid_val);
-            w_vector_error[q].push_back(del_w);
-
-            // ---------------------------------------------------------
-            // Yield without background subtraction
+            // N_ex_cut from signal histogram
             // ---------------------------------------------------------
 
             double N_ex_cut =
                 hist_signal[q][w]->Integral(25, 40);
+
+            // ---------------------------------------------------------
+            // Yield without background subtraction
+            // ---------------------------------------------------------
 
             if (intergral_signal_excut != nullptr &&
                 intergral_signal_excut_error != nullptr) 
@@ -405,126 +519,44 @@ void CalculateYields(
             }
 
             // ---------------------------------------------------------
-            // Determine number of background events
+            // Scale coefficient
             // ---------------------------------------------------------
 
-            double N;
-            double scale_coef = (hist_signal[q][w] == hist_bg[q][w]) 
-                    ? 1.0 
-                    : (hist_signal[q][w]->Integral() / hist_bg[q][w]->Integral());
+            double scale_coef =
+                (hist_signal[q][w] == hist_bg[q][w])
+                    ? 1.0
+                    : hist_signal[q][w]->Integral()
+                      / hist_bg[q][w]->Integral();
+
+            // ---------------------------------------------------------
+            // Background
+            // ---------------------------------------------------------
 
             int w_reper = cfg.w_fit_min;
 
             if (q == 4 || q == 5)
                 w_reper = cfg.w_reper_q45;
 
+            double N_bg = 0.0;
+
             if (w < w_reper)
             {
-                N = N_ex_cut;
+                // No background subtraction
+                N_bg = 0.0;
             }
             else if (w < cfg.bg_fit_start)
             {
-                N =
-                    N_ex_cut -
-                    intergral_background[q][w - w_reper] * scale_coef;
+                // Interpolated background
+                N_bg =
+                    intergral_background[q][w - w_reper]
+                    * scale_coef;
             }
             else
             {
-                // -----------------------------------------------------
-                // Fit
-                // -----------------------------------------------------
+                // Background from fit
 
-                double h_raw =
-                    hist_bg[q][w]->GetMaximum();
-
-                double current_xmax;
-
-                if (w < cfg.xmax_mid_start)
-                    current_xmax = cfg.xmax_low;
-                else if (w < cfg.xmax_high_start)
-                    current_xmax = cfg.xmax_mid;
-                else
-                    current_xmax = cfg.xmax_high;
-
-                TF1* fitfunc = new TF1(
-                    Form("fitfunc_q%d_w%d", q, w),
-                    combined,
-                    cfg.xmin,
-                    current_xmax,
-                    7
-                );
-
-                double b_raw =
-                    hist_bg[q][w]->GetBinContent(cfg.bg_ampl_bin) * cfg.bg_ampl_factor;
-
-                fitfunc->SetParameters(
-                    b_raw,
-                    cfg.bg_mean,
-                    cfg.bg_sigma,
-                    h_raw,
-                    cfg.signal_mean,
-                    cfg.signal_sigma,
-                    cfg.signal_tail
-                );
-
-                hist_bg[q][w]->Fit(fitfunc, "R");
-
-                // -----------------------------------------------------
-                // Save fit parameters
-                // -----------------------------------------------------
-
-                FitResult& result = fit_results[q][w];
-
-                result.fitted = true;
-
-                result.bg_amp =
-                    fitfunc->GetParameter(0);
-
-                result.bg_mean =
-                    fitfunc->GetParameter(1);
-
-                result.bg_sigma =
-                    fitfunc->GetParameter(2);
-
-                result.bg_amp_error =
-                    fitfunc->GetParError(0);
-
-                result.bg_mean_error =
-                    fitfunc->GetParError(1);
-
-                result.bg_sigma_error =
-                    fitfunc->GetParError(2);
-
-                result.signal_amp =
-                    fitfunc->GetParameter(3);
-
-                result.signal_mean =
-                    fitfunc->GetParameter(4);
-
-                result.signal_sigma =
-                    fitfunc->GetParameter(5);
-
-                result.signal_tail =
-                    fitfunc->GetParameter(6);
-
-                result.signal_amp_error =
-                    fitfunc->GetParError(3);
-
-                result.signal_mean_error =
-                    fitfunc->GetParError(4);
-
-                result.signal_sigma_error =
-                    fitfunc->GetParError(5);
-
-                result.signal_tail_error =
-                    fitfunc->GetParError(6);
-
-                result.xmin = cfg.xmin;
-                result.xmax = current_xmax;
-
-                // -----------------------------------------------------
-                // Background
-                // -----------------------------------------------------
+                const FitResult& result =
+                    fit_results[q][w];
 
                 TF1* bg = new TF1(
                     Form("background_q%d_w%d", q, w),
@@ -540,22 +572,37 @@ void CalculateYields(
                     result.bg_sigma
                 );
 
-                N =
-                    N_ex_cut -
-                    bg->Integral(cfg.bg_integral_xmin, cfg.bg_integral_xmax) * cfg.bin_width_factor * scale_coef;
+                N_bg =
+                    bg->Integral(
+                        cfg.bg_integral_xmin,
+                        cfg.bg_integral_xmax
+                    )
+                    * cfg.bin_width_factor
+                    * scale_coef;
 
                 delete bg;
-                delete fitfunc;
             }
+
+            // ---------------------------------------------------------
+            // Signal events after background subtraction
+            // ---------------------------------------------------------
+
+            double N =
+                N_ex_cut - N_bg;
 
             // ---------------------------------------------------------
             // Final yield
             // ---------------------------------------------------------
 
             double yield =
-                N / del_q2 / del_w / flux;
+                N /
+                del_q2 /
+                del_w /
+                flux;
 
-            intergral_signal[q].push_back(yield);
+            intergral_signal[q].push_back(
+                yield
+            );
 
             intergral_signal_error[q].push_back(
                 yield *
@@ -569,7 +616,7 @@ void CalculateYields(
     }
 }
 
-void DrawYields(
+void DrawMissingMassFit(
     TH1F* hist[12][100],
     const FitResult fit_results[6][100],
     const char* pdfFilePrefix
@@ -954,21 +1001,27 @@ void yields_pdf(void)
         "results/extrapolating_bg.pdf"
     );
 
+    FitBackground(
+        missing_pip_hist,
+        missing_pip_fit_results,
+        missing_pip_bg_cfg
+    );
+
     CalculateYields(
         missing_pip_hist,
         missing_pip_hist,
+        missing_pip_fit_results,
+        intergral_background,
         w_vector,
         w_vector_error,
         intergral_signal_excut,
         intergral_signal_excut_error,
         intergral_signal,
         intergral_signal_error,
-        intergral_background,
-        missing_pip_fit_results,
         missing_pip_bg_cfg
     );
 
-    DrawYields(
+    DrawMissingMassFit(
         missing_pip_hist, 
         missing_pip_fit_results, 
         "results/LogNormalFit"
@@ -1001,21 +1054,27 @@ void yields_pdf(void)
         "results/extrapolating_bg_MM0.pdf"
     );
 
+    FitBackground(
+        fullly_exclusive_hist,
+        fully_exclusive_fit_results,
+        fully_exclusive_bg_cfg
+    );
+
     CalculateYields(
         missing_pip_hist,
         fullly_exclusive_hist,
+        fully_exclusive_fit_results,
+        background_MM0,
         w_vector_MM0,
         w_vector_MM0_error,
         nullptr,
         nullptr,
         intergral_signal_4th_method_MM0,
         intergral_signal_4th_method_MM0_error,
-        background_MM0,
-        fully_exclusive_fit_results,
         fully_exclusive_bg_cfg
     );
 
-    DrawYields(
+    DrawMissingMassFit(
         fullly_exclusive_hist, 
         fully_exclusive_fit_results, 
         "results/MMpiplus_from_MM0_topology_fit"
