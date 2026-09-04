@@ -73,10 +73,14 @@ struct FitResult
     double xmax = 0;
 };
 
-#include <vector>
-#include <TFile.h>
-#include <TH1F.h>
-#include <TString.h>
+struct YieldsOutput {
+    std::vector<std::vector<double>> w_vector;
+    std::vector<std::vector<double>> w_vector_error;
+    std::vector<std::vector<double>> integral_signal_excut;
+    std::vector<std::vector<double>> integral_signal_excut_error;
+    std::vector<std::vector<double>> integral_signal;
+    std::vector<std::vector<double>> integral_error;
+};
 
 std::vector<std::vector<TH1F*>> LoadHistograms(
     TFile* infile, 
@@ -99,7 +103,6 @@ std::vector<std::vector<TH1F*>> LoadHistograms(
 
     return histograms;
 }
-
 
 ExtrapolationOutput ExtrapolateBackground(
     const std::vector<std::vector<FitResult>>& fit_results,
@@ -447,19 +450,21 @@ std::vector<std::vector<FitResult>> FitBackground(
     return fit_results;
 }
 
-void CalculateYields(
+YieldsOutput CalculateYields(
     const std::vector<std::vector<TH1F*>>& hist_signal,
     const std::vector<std::vector<TH1F*>>& hist_bg,
     const std::vector<std::vector<FitResult>>& fit_results,
-    const std::vector<std::vector<double>> integral_background,
-    std::vector<double> w_vector[6],
-    std::vector<double> w_vector_error[6],
-    std::vector<double> intergral_signal_excut[6],
-    std::vector<double> intergral_signal_excut_error[6],
-    std::vector<double> intergral_signal[6],
-    std::vector<double> intergral_signal_error[6],
+    const std::vector<std::vector<double>>& integral_background, // добавил ссылку &, чтобы не копировать
     const YieldsConfig& cfg)
 {
+    YieldsOutput res;
+    res.w_vector.resize(cfg.q_max + 1);
+    res.w_vector_error.resize(cfg.q_max + 1);
+    res.integral_signal_excut.resize(cfg.q_max + 1);
+    res.integral_signal_excut_error.resize(cfg.q_max + 1);
+    res.integral_signal.resize(cfg.q_max + 1);
+    res.integral_error.resize(cfg.q_max + 1);
+
     const double M_prot = 0.938;
     const double E_beam = 6.535;
     const double alpha = 1.0 / 137.0;
@@ -488,8 +493,8 @@ void CalculateYields(
             double w_max_val = 1.4 + (w + 1) * del_w;
             double w_mid_val = (w_min_val + w_max_val) / 2.0;
 
-            w_vector[q].push_back(w_mid_val);
-            w_vector_error[q].push_back(del_w);
+            res.w_vector[q].push_back(w_mid_val);
+            res.w_vector_error[q].push_back(del_w);
 
             //Flux
             double E_prime =
@@ -559,17 +564,14 @@ void CalculateYields(
             double N_ex_cut = hist_signal[q][w]->Integral(25, 40);
 
             // Yield without background subtraction
-            if (intergral_signal_excut != nullptr &&
-                intergral_signal_excut_error != nullptr) 
-            {
-                double yield_ex_cut = N_ex_cut / del_q2 / del_w / flux;
-                double yield_ex_cut_error = yield_ex_cut * sqrt(
-                    pow(sqrt(N_ex_cut) / N_ex_cut, 2) + pow(delta_flux / flux, 2)
-                );
 
-                intergral_signal_excut[q].push_back(yield_ex_cut);
-                intergral_signal_excut_error[q].push_back(yield_ex_cut_error);
-            }
+            double yield_ex_cut = N_ex_cut / del_q2 / del_w / flux;
+            double yield_ex_cut_error = yield_ex_cut * sqrt(
+                pow(sqrt(N_ex_cut) / N_ex_cut, 2) + pow(delta_flux / flux, 2)
+            );
+
+            res.integral_signal_excut[q].push_back(yield_ex_cut);
+            res.integral_signal_excut_error[q].push_back(yield_ex_cut_error);
 
             // Scale coefficient
             double scale_coef =
@@ -634,11 +636,11 @@ void CalculateYields(
             // Final yield
             double yield = N / del_q2 / del_w / flux;
 
-            intergral_signal[q].push_back(
+            res.integral_signal[q].push_back(
                 yield
             );
 
-            intergral_signal_error[q].push_back(
+            res.integral_error[q].push_back(
                 yield *
                 sqrt(
                     pow(sqrt(N) / N, 2)
@@ -648,6 +650,8 @@ void CalculateYields(
             );
         }
     }
+
+    return res;
 }
 
 void DrawMissingMassFit(
@@ -968,20 +972,6 @@ void yields_pdf(void)
     gErrorIgnoreLevel = kWarning;
 	gROOT->SetBatch(kTRUE); 
 
-	std::vector<double> intergral_signal[6];
-	std::vector<double> intergral_signal_4th_method_MM0[6];
-	std::vector<double> intergral_signal_excut[6];
-
-	std::vector<double> intergral_signal_error[6];
-	std::vector<double> intergral_signal_4th_method_MM0_error[6];
-	std::vector<double> intergral_signal_excut_error[6];
-
-	std::vector<double> w_vector[6];
-	std::vector<double> w_vector_error[6];
-
-	std::vector<double> w_vector_MM0[6];
-	std::vector<double> w_vector_MM0_error[6];
-
     TFile *missing_pip_file = TFile::Open("interim/mm_pip_hists_m_pip.root");
     TFile *fullly_exclusive_file = TFile::Open("interim/mm_pip_hists_m_0.root");
 
@@ -1028,17 +1018,19 @@ void yields_pdf(void)
 
     std::cout << "    CalculateYields" << std::endl;
 
-    CalculateYields(
-        missing_pip_hist,
-        missing_pip_hist,
-        missing_pip_fit_results,
-        integral_background,
+    auto [
         w_vector,
         w_vector_error,
         intergral_signal_excut,
         intergral_signal_excut_error,
         intergral_signal,
-        intergral_signal_error,
+        intergral_signal_error
+    ] =
+    CalculateYields(
+        missing_pip_hist,
+        missing_pip_hist,
+        missing_pip_fit_results,
+        integral_background,
         missing_pip_cfg
     );
 
@@ -1094,17 +1086,19 @@ void yields_pdf(void)
 
     std::cout << "    CalculateYields" << std::endl;
 
+    auto [
+        w_vector_MM0,
+        w_vector_MM0_error,
+        intergral_signal_excut_MM0,
+        intergral_signal_excut_MM0_error,
+        intergral_signal_4th_method_MM0,
+        intergral_signal_4th_method_MM0_error
+    ] =
     CalculateYields(
         missing_pip_hist,
         fullly_exclusive_hist,
         fully_exclusive_fit_results,
         background_MM0,
-        w_vector_MM0,
-        w_vector_MM0_error,
-        nullptr,
-        nullptr,
-        intergral_signal_4th_method_MM0,
-        intergral_signal_4th_method_MM0_error,
         fully_exclusive_bg_cfg
     );
 
