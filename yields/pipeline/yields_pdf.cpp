@@ -660,13 +660,6 @@ void DrawMissingMassFit(
         
         TString pdfFileName = TString::Format("%s_in_Q2_bin_%d.pdf", pdfFilePrefix, q + 1);
 
-        // TString pdfFileName =
-        //     Form(
-        //         "%s_in_Q2_bin_%d.pdf",
-        //         pdfFilePrefix,
-        //         q + 1
-        //     );
-
         canvas->Print(pdfFileName + "[");
 
         for (int w = 0; w < w_brink; ++w)
@@ -675,10 +668,11 @@ void DrawMissingMassFit(
             double w_max_val = 1.4 + (w + 1) * 0.025;
 
             double h_raw = hist[q][w]->GetMaximum();
+            double y_axis_maximum = h_raw * 1.05;
 
             TString title = Form(
-                "LogNorm method Q^{2} [%g,%g] GeV^{2} "
-                "W [%g,%g] GeV; MM_X^{2}, GeV^{2}",
+                "MM^{2} distribution for Q^{2} #in [%g, %g] GeV^{2}, "
+                "W #in [%g, %g] GeV; MM_{#pi^{+}}^{2}, GeV^{2}",
                 Q2_min_val,
                 Q2_max_val,
                 w_min_val,
@@ -687,27 +681,20 @@ void DrawMissingMassFit(
 
             
             // Raw histogram
-            
-
             hist[q][w]->SetTitle(title);
 
             hist[q][w]->SetStats(kFALSE);
             hist[q][w]->SetLineColor(4);
             hist[q][w]->SetLineWidth(3);
-
+            
             hist[q][w]->GetYaxis()->SetRangeUser(
-                0,
-                h_raw * 1.05
+                0, y_axis_maximum
             );
 
             hist[q][w]->Draw();
 
-            
             // Draw fit
-            
-
-            const FitResult& result =
-                fit_results[q][w];
+            const FitResult& result = fit_results[q][w];
 
             if (result.fitted)
             {
@@ -773,36 +760,32 @@ void DrawMissingMassFit(
                 bg->SetLineWidth(2);
                 bg->Draw("SAME");
 
-                // -----------------------------------------------------
                 // Vertical line at maximum
-                // -----------------------------------------------------
-
-                TLine* l_3 = new TLine(
+                TLine* maximum_bin_line = new TLine(
                     hist[q][w]->GetMaximumBin() * 0.01 - 0.3,
                     0,
                     hist[q][w]->GetMaximumBin() * 0.01 - 0.3,
-                    h_raw
+                    y_axis_maximum
                 );
 
-                l_3->SetLineColor(kBlack);
-                l_3->SetLineStyle(kDashed);
-                l_3->Draw("SAME");
+                maximum_bin_line->SetLineColor(kBlack);
+                maximum_bin_line->SetLineStyle(kDashed);
+                maximum_bin_line->Draw("SAME");
 
-                // -----------------------------------------------------
                 // Fit information
-                // -----------------------------------------------------
-
                 TPaveText* pave = new TPaveText(
-                    0.45,
-                    0.6,
-                    0.88,
-                    0.9,
-                    "NDC"
+                    0.55, 0.55, 0.89, 0.89, "NDC"
                 );
 
                 pave->SetFillColor(0);
                 pave->SetTextAlign(12);
                 pave->SetTextSize(0.03);
+
+                float events_within_ec = hist[q][w]->Integral(25, 40);
+                float bg_events_within_ec = bg->Integral(
+                    cfg.bg_integral_xmin,
+                    cfg.bg_integral_xmax
+                ) * cfg.bin_width_factor;
 
                 pave->AddText(
                     Form(
@@ -811,11 +794,25 @@ void DrawMissingMassFit(
                     )
                 );
 
-                pave->AddText("Fit results:");
+                pave->AddText(
+                    Form(
+                        "Events within e.c.: %.0f",
+                        events_within_ec
+                    )
+                );
 
                 pave->AddText(
                     Form(
-                        "Amplitude bg: %.5f +/- %.5f",
+                        "Bg events within e.c.: %.0f",
+                        bg_events_within_ec
+                    )
+                );
+
+                pave->AddText("");
+
+                pave->AddText(
+                    Form(
+                        "Amplitude bg: %.0f #pm %.0f",
                         result.bg_amp,
                         result.bg_amp_error
                     )
@@ -823,7 +820,7 @@ void DrawMissingMassFit(
 
                 pave->AddText(
                     Form(
-                        "Mean bg: %.5f +/- %.5f",
+                        "Mean bg: %.4f #pm %.4f",
                         result.bg_mean,
                         result.bg_mean_error
                     )
@@ -831,15 +828,17 @@ void DrawMissingMassFit(
 
                 pave->AddText(
                     Form(
-                        "Sigma bg: %.5f +/- %.5f",
+                        "#sigma bg: %.4f #pm %.4f",
                         result.bg_sigma,
                         result.bg_sigma_error
                     )
                 );
 
+                pave->AddText("");
+
                 pave->AddText(
                     Form(
-                        "Amplitude signal: %.5f +/- %.5f",
+                        "Amplitude signal: %.0f #pm %.0f",
                         result.signal_amp,
                         result.signal_amp_error
                     )
@@ -847,7 +846,7 @@ void DrawMissingMassFit(
 
                 pave->AddText(
                     Form(
-                        "Mean signal: %.5f +/- %.5f",
+                        "Mean signal: %.5f #pm %.5f",
                         result.signal_mean,
                         result.signal_mean_error
                     )
@@ -855,7 +854,7 @@ void DrawMissingMassFit(
 
                 pave->AddText(
                     Form(
-                        "Sigma signal: %.5f +/- %.5f",
+                        "#sigma signal: %.5f #pm %.5f",
                         result.signal_sigma,
                         result.signal_sigma_error
                     )
@@ -863,7 +862,7 @@ void DrawMissingMassFit(
 
                 pave->AddText(
                     Form(
-                        "Rad. tail: %.5f +/- %.5f",
+                        "Rad. tail: %.3f #pm %.3f",
                         result.signal_tail,
                         result.signal_tail_error
                     )
@@ -871,22 +870,34 @@ void DrawMissingMassFit(
 
                 pave->Draw("SAME");
 
-                // -----------------------------------------------------
-                // Legend
-                // -----------------------------------------------------
+                TPaveText* pave_bg_ratio = new TPaveText(
+                    0.11, 0.5, 0.2, 0.6, "NDC"
+                );
 
+                pave_bg_ratio->SetFillColor(0);
+                pave_bg_ratio->SetTextAlign(12);
+                pave_bg_ratio->SetTextSize(0.05);
+                pave_bg_ratio->SetTextColor(kRed);
+
+                pave_bg_ratio->AddText(
+                    Form(
+                        "   R = %.2f ", 
+                        bg_events_within_ec / events_within_ec
+                    )
+                );
+
+                pave_bg_ratio->Draw("SAME");
+                
+                // Legend
                 TLegend* legend = new TLegend(
-                    0.6,
-                    0.4,
-                    0.9,
-                    0.6
+                    0.65, 0.3, 0.88, 0.5
                 );
 
                 legend->SetTextSize(0.02);
 
                 legend->AddEntry(
                     hist[q][w],
-                    "Pass2 Data",
+                    "Experimental data",
                     "l"
                 );
 
@@ -898,7 +909,7 @@ void DrawMissingMassFit(
 
                 legend->AddEntry(
                     peakfunc,
-                    "Signal (gaus+rad.tail)",
+                    "Signal (gaus + rad. tail)",
                     "l"
                 );
 
@@ -910,30 +921,27 @@ void DrawMissingMassFit(
 
                 legend->Draw("SAME");
             }
-
             
             // Integration limits
-            
-
-            TLine* l_1 = new TLine(
-                -0.05,
+            TLine* left_exclusivity_cut = new TLine(
+                cfg.bg_integral_xmin,
                 0,
-                -0.05,
-                h_raw
+                cfg.bg_integral_xmin,
+                y_axis_maximum
             );
 
-            TLine* l_2 = new TLine(
-                0.1,
+            left_exclusivity_cut->SetLineColor(kBlack);
+            left_exclusivity_cut->Draw("SAME");
+
+            TLine* right_exclusivity_cut = new TLine(
+                cfg.bg_integral_xmax,
                 0,
-                0.1,
-                h_raw
+                cfg.bg_integral_xmax,
+                y_axis_maximum
             );
 
-            l_1->SetLineColor(kBlack);
-            l_2->SetLineColor(kBlack);
-
-            l_1->Draw("SAME");
-            l_2->Draw("SAME");
+            right_exclusivity_cut->SetLineColor(kBlack);
+            right_exclusivity_cut->Draw("SAME");
 
             canvas->Update();
             canvas->Print(pdfFileName);
