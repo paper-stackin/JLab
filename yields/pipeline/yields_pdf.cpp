@@ -512,34 +512,25 @@ void DrawBackgroundExtrapolation(
     TCanvas* canvas_fit_bg = new TCanvas(
         "canvas_fit_bg",
         "Fit bg",
-        800,
-        600
+        1280,
+        720
     );
 
     canvas_fit_bg->Print(pdfFileName + "[");
 
     for (int q = cfg.q_min; q <= cfg.q_max; ++q)
     {
-        // ---------------------------------------------------------
         // Q2 range
-        // ---------------------------------------------------------
-
-        double Q2_min_val =
-            cfg.Q2_vals[q];
-
-        double Q2_max_val =
-            cfg.Q2_vals[q + 1];
+        double Q2_min_val = cfg.Q2_vals[q];
+        double Q2_max_val = cfg.Q2_vals[q + 1];
 
         TString namegraph = Form(
-            "Background VS W_bin for Q^{2} in [%g, %g] GeV^{2}; W bin number; BG",
+            "Background for Q^{2} #in [%g, %g] GeV^{2}; W bin; Number of bg events",
             Q2_min_val,
             Q2_max_val
         );
 
-        // ---------------------------------------------------------
         // Graph
-        // ---------------------------------------------------------
-
         TGraphErrors* graph_fit_bg = new TGraphErrors(
             integral_background[q].size(),
             w_bg_fit[q].data(),
@@ -553,12 +544,8 @@ void DrawBackgroundExtrapolation(
         graph_fit_bg->SetMarkerSize(10.0);
         graph_fit_bg->GetXaxis()->SetNdivisions(20, kTRUE);
 
-        // ---------------------------------------------------------
         // Extrapolation function
-        // ---------------------------------------------------------
-
-        int w_reper =
-            extrapolation_results[q].w_reper;
+        int w_reper = extrapolation_results[q].w_reper;
 
         TF1* fitFunction = new TF1(
             Form("fitFunction_draw_q%d", q),
@@ -582,12 +569,9 @@ void DrawBackgroundExtrapolation(
             extrapolation_results[q].B
         );
 
-        // ---------------------------------------------------------
         // Draw
-        // ---------------------------------------------------------
-
         graph_fit_bg->Draw("AP");
-        fitFunction->Draw("P SAME");
+        fitFunction->Draw("SAME");
 
         graph_fit_bg->GetXaxis()->SetRangeUser(0, 20);
         graph_fit_bg->GetYaxis()->SetRangeUser(
@@ -595,14 +579,11 @@ void DrawBackgroundExtrapolation(
             fitFunction->Eval(cfg.w_fit_max) * 1.1
         );
 
-        // ---------------------------------------------------------
         // Fit information
-        // ---------------------------------------------------------
-
         TPaveText* pave = new TPaveText(
             0.7,
             0.4,
-            0.9,
+            0.71,
             0.6,
             "NDC"
         );
@@ -613,7 +594,7 @@ void DrawBackgroundExtrapolation(
 
         pave->AddText(
             Form(
-                "A*(x - %d)^{2}+B*(x-%d)",
+                "A #bullet (x - %d)^{2} + B #bullet (x - %d)",
                 w_reper,
                 w_reper
             )
@@ -623,24 +604,21 @@ void DrawBackgroundExtrapolation(
 
         pave->AddText(
             Form(
-                "   A = %.5f",
+                "   A = %.2f",
                 extrapolation_results[q].A
             )
         );
 
         pave->AddText(
             Form(
-                "   B = %.5f",
+                "   B = %.2f",
                 extrapolation_results[q].B
             )
         );
 
         pave->Draw("SAME");
-
-        // ---------------------------------------------------------
+        
         // Save page
-        // ---------------------------------------------------------
-
         canvas_fit_bg->Update();
         canvas_fit_bg->Print(pdfFileName);
 
@@ -707,9 +685,9 @@ void DrawMissingMassFit(
                 w_max_val
             );
 
-            // ---------------------------------------------------------
+            
             // Raw histogram
-            // ---------------------------------------------------------
+            
 
             hist[q][w]->SetTitle(title);
 
@@ -724,9 +702,9 @@ void DrawMissingMassFit(
 
             hist[q][w]->Draw();
 
-            // ---------------------------------------------------------
+            
             // Draw fit
-            // ---------------------------------------------------------
+            
 
             const FitResult& result =
                 fit_results[q][w];
@@ -933,9 +911,9 @@ void DrawMissingMassFit(
                 legend->Draw("SAME");
             }
 
-            // ---------------------------------------------------------
+            
             // Integration limits
-            // ---------------------------------------------------------
+            
 
             TLine* l_1 = new TLine(
                 -0.05,
