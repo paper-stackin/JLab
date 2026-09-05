@@ -104,6 +104,97 @@ std::vector<std::vector<TH1F*>> LoadHistograms(
     return histograms;
 }
 
+std::vector<std::vector<FitResult>> FitBackground(
+    const std::vector<std::vector<TH1F*>>& hist_bg,
+    const YieldsConfig& cfg)
+{
+    int n_q = cfg.q_max - cfg.q_min + 1;
+
+    std::vector<std::vector<FitResult>> fit_results(
+        n_q,
+        std::vector<FitResult>(100)
+    );
+
+    for (int q = cfg.q_min; q <= cfg.q_max; ++q)
+    {
+        int w_brink = 64;
+
+        if (q == 4)
+            w_brink = 56;
+        else if (q == 5)
+            w_brink = 37;
+
+        for (int w = cfg.bg_fit_start; w < w_brink; ++w)
+        {
+            double h_raw =
+                hist_bg[q][w]->GetMaximum();
+
+            double current_xmax;
+
+            if (w < cfg.xmax_mid_start)
+                current_xmax = cfg.xmax_low;
+            else if (w < cfg.xmax_high_start)
+                current_xmax = cfg.xmax_mid;
+            else
+                current_xmax = cfg.xmax_high;
+
+            TF1* fitfunc = new TF1(
+                Form("fitfunc_q%d_w%d", q, w),
+                combined,
+                cfg.xmin,
+                current_xmax,
+                7
+            );
+
+            double b_raw =
+                hist_bg[q][w]->GetBinContent(cfg.bg_ampl_bin)
+                * cfg.bg_ampl_factor;
+
+            fitfunc->SetParameters(
+                b_raw,
+                cfg.bg_mean,
+                cfg.bg_sigma,
+                h_raw,
+                cfg.signal_mean,
+                cfg.signal_sigma,
+                cfg.signal_tail
+            );
+
+            hist_bg[q][w]->Fit(fitfunc, "RQ");
+
+            FitResult& result =
+                fit_results[q - cfg.q_min][w];
+
+            result.fitted = true;
+
+            result.bg_amp = fitfunc->GetParameter(0);
+            result.bg_mean = fitfunc->GetParameter(1);
+            result.bg_sigma = fitfunc->GetParameter(2);
+
+            result.bg_amp_error = fitfunc->GetParError(0);
+            result.bg_mean_error = fitfunc->GetParError(1);
+            result.bg_sigma_error = fitfunc->GetParError(2);
+
+            result.signal_amp = fitfunc->GetParameter(3);
+            result.signal_mean = fitfunc->GetParameter(4);
+            result.signal_sigma = fitfunc->GetParameter(5);
+            result.signal_tail = fitfunc->GetParameter(6);
+
+            result.signal_amp_error = fitfunc->GetParError(3);
+            result.signal_mean_error = fitfunc->GetParError(4);
+            result.signal_sigma_error = fitfunc->GetParError(5);
+            result.signal_tail_error = fitfunc->GetParError(6);
+
+            result.xmin = cfg.xmin;
+            result.xmax = current_xmax;
+
+            delete fitfunc;
+        }
+    }
+
+    return fit_results;
+}
+
 ExtrapolationOutput ExtrapolateBackground(
     const std::vector<std::vector<FitResult>>& fit_results,
     const YieldsConfig& cfg)
@@ -206,255 +297,11 @@ ExtrapolationOutput ExtrapolateBackground(
     return output;
 }
 
-void DrawBackgroundExtrapolation(
-    const std::vector<std::vector<double>> integral_background,
-    const std::vector<std::vector<double>> integral_background_error,
-    const std::vector<std::vector<double>> w_bg_fit,
-    const std::vector<ExtrapolationResult>& extrapolation_results,
-    const YieldsConfig& cfg,
-    const TString& pdfFileName)
-{
-    TCanvas* canvas_fit_bg = new TCanvas(
-        "canvas_fit_bg",
-        "Fit bg",
-        800,
-        600
-    );
-
-    canvas_fit_bg->Print(pdfFileName + "[");
-
-    for (int q = cfg.q_min; q <= cfg.q_max; ++q)
-    {
-        // ---------------------------------------------------------
-        // Q2 range
-        // ---------------------------------------------------------
-
-        double Q2_min_val =
-            cfg.Q2_vals[q];
-
-        double Q2_max_val =
-            cfg.Q2_vals[q + 1];
-
-        TString namegraph = Form(
-            "Background VS W_bin for Q^{2} in [%g, %g] GeV^{2}; W bin number; BG",
-            Q2_min_val,
-            Q2_max_val
-        );
-
-        // ---------------------------------------------------------
-        // Graph
-        // ---------------------------------------------------------
-
-        TGraphErrors* graph_fit_bg = new TGraphErrors(
-            integral_background[q].size(),
-            w_bg_fit[q].data(),
-            integral_background[q].data(),
-            nullptr,
-            integral_background_error[q].data()
-        );
-
-        graph_fit_bg->SetTitle(namegraph);
-        graph_fit_bg->SetMinimum(0);
-        graph_fit_bg->SetMarkerSize(10.0);
-        graph_fit_bg->GetXaxis()->SetNdivisions(20, kTRUE);
-
-        // ---------------------------------------------------------
-        // Extrapolation function
-        // ---------------------------------------------------------
-
-        int w_reper =
-            extrapolation_results[q].w_reper;
-
-        TF1* fitFunction = new TF1(
-            Form("fitFunction_draw_q%d", q),
-            Form(
-                "[0]*(x-%d)*(x-%d)+[1]*(x-%d)",
-                w_reper,
-                w_reper,
-                w_reper
-            ),
-            w_reper - 0.1,
-            cfg.w_fit_max
-        );
-
-        fitFunction->SetParameter(
-            0,
-            extrapolation_results[q].A
-        );
-
-        fitFunction->SetParameter(
-            1,
-            extrapolation_results[q].B
-        );
-
-        // ---------------------------------------------------------
-        // Draw
-        // ---------------------------------------------------------
-
-        graph_fit_bg->Draw("AP");
-        fitFunction->Draw("P SAME");
-
-        graph_fit_bg->GetXaxis()->SetRangeUser(0, 20);
-        graph_fit_bg->GetYaxis()->SetRangeUser(
-            0,
-            fitFunction->Eval(cfg.w_fit_max) * 1.1
-        );
-
-        // ---------------------------------------------------------
-        // Fit information
-        // ---------------------------------------------------------
-
-        TPaveText* pave = new TPaveText(
-            0.7,
-            0.4,
-            0.9,
-            0.6,
-            "NDC"
-        );
-
-        pave->SetFillColor(0);
-        pave->SetTextAlign(12);
-        pave->SetTextSize(0.03);
-
-        pave->AddText(
-            Form(
-                "A*(x - %d)^{2}+B*(x-%d)",
-                w_reper,
-                w_reper
-            )
-        );
-
-        pave->AddText("Fit results:");
-
-        pave->AddText(
-            Form(
-                "   A = %.5f",
-                extrapolation_results[q].A
-            )
-        );
-
-        pave->AddText(
-            Form(
-                "   B = %.5f",
-                extrapolation_results[q].B
-            )
-        );
-
-        pave->Draw("SAME");
-
-        // ---------------------------------------------------------
-        // Save page
-        // ---------------------------------------------------------
-
-        canvas_fit_bg->Update();
-        canvas_fit_bg->Print(pdfFileName);
-
-        delete pave;
-        delete fitFunction;
-        delete graph_fit_bg;
-    }
-
-    canvas_fit_bg->Print(pdfFileName + "]");
-
-    delete canvas_fit_bg;
-}
-
-std::vector<std::vector<FitResult>> FitBackground(
-    const std::vector<std::vector<TH1F*>>& hist_bg,
-    const YieldsConfig& cfg)
-{
-    int n_q = cfg.q_max - cfg.q_min + 1;
-
-    std::vector<std::vector<FitResult>> fit_results(
-        n_q,
-        std::vector<FitResult>(100)
-    );
-
-    for (int q = cfg.q_min; q <= cfg.q_max; ++q)
-    {
-        int w_brink = 64;
-
-        if (q == 4)
-            w_brink = 56;
-        else if (q == 5)
-            w_brink = 37;
-
-        for (int w = cfg.bg_fit_start; w < w_brink; ++w)
-        {
-            double h_raw =
-                hist_bg[q][w]->GetMaximum();
-
-            double current_xmax;
-
-            if (w < cfg.xmax_mid_start)
-                current_xmax = cfg.xmax_low;
-            else if (w < cfg.xmax_high_start)
-                current_xmax = cfg.xmax_mid;
-            else
-                current_xmax = cfg.xmax_high;
-
-            TF1* fitfunc = new TF1(
-                Form("fitfunc_q%d_w%d", q, w),
-                combined,
-                cfg.xmin,
-                current_xmax,
-                7
-            );
-
-            double b_raw =
-                hist_bg[q][w]->GetBinContent(cfg.bg_ampl_bin)
-                * cfg.bg_ampl_factor;
-
-            fitfunc->SetParameters(
-                b_raw,
-                cfg.bg_mean,
-                cfg.bg_sigma,
-                h_raw,
-                cfg.signal_mean,
-                cfg.signal_sigma,
-                cfg.signal_tail
-            );
-
-            hist_bg[q][w]->Fit(fitfunc, "RQ");
-
-            FitResult& result =
-                fit_results[q - cfg.q_min][w];
-
-            result.fitted = true;
-
-            result.bg_amp = fitfunc->GetParameter(0);
-            result.bg_mean = fitfunc->GetParameter(1);
-            result.bg_sigma = fitfunc->GetParameter(2);
-
-            result.bg_amp_error = fitfunc->GetParError(0);
-            result.bg_mean_error = fitfunc->GetParError(1);
-            result.bg_sigma_error = fitfunc->GetParError(2);
-
-            result.signal_amp = fitfunc->GetParameter(3);
-            result.signal_mean = fitfunc->GetParameter(4);
-            result.signal_sigma = fitfunc->GetParameter(5);
-            result.signal_tail = fitfunc->GetParameter(6);
-
-            result.signal_amp_error = fitfunc->GetParError(3);
-            result.signal_mean_error = fitfunc->GetParError(4);
-            result.signal_sigma_error = fitfunc->GetParError(5);
-            result.signal_tail_error = fitfunc->GetParError(6);
-
-            result.xmin = cfg.xmin;
-            result.xmax = current_xmax;
-
-            delete fitfunc;
-        }
-    }
-
-    return fit_results;
-}
-
 YieldsOutput CalculateYields(
     const std::vector<std::vector<TH1F*>>& hist_signal,
     const std::vector<std::vector<TH1F*>>& hist_bg,
     const std::vector<std::vector<FitResult>>& fit_results,
-    const std::vector<std::vector<double>>& integral_background, // добавил ссылку &, чтобы не копировать
+    const std::vector<std::vector<double>>& integral_background, 
     const YieldsConfig& cfg)
 {
     YieldsOutput res;
@@ -654,6 +501,159 @@ YieldsOutput CalculateYields(
     return res;
 }
 
+void DrawBackgroundExtrapolation(
+    const std::vector<std::vector<double>> integral_background,
+    const std::vector<std::vector<double>> integral_background_error,
+    const std::vector<std::vector<double>> w_bg_fit,
+    const std::vector<ExtrapolationResult>& extrapolation_results,
+    const YieldsConfig& cfg,
+    const TString& pdfFileName)
+{
+    TCanvas* canvas_fit_bg = new TCanvas(
+        "canvas_fit_bg",
+        "Fit bg",
+        800,
+        600
+    );
+
+    canvas_fit_bg->Print(pdfFileName + "[");
+
+    for (int q = cfg.q_min; q <= cfg.q_max; ++q)
+    {
+        // ---------------------------------------------------------
+        // Q2 range
+        // ---------------------------------------------------------
+
+        double Q2_min_val =
+            cfg.Q2_vals[q];
+
+        double Q2_max_val =
+            cfg.Q2_vals[q + 1];
+
+        TString namegraph = Form(
+            "Background VS W_bin for Q^{2} in [%g, %g] GeV^{2}; W bin number; BG",
+            Q2_min_val,
+            Q2_max_val
+        );
+
+        // ---------------------------------------------------------
+        // Graph
+        // ---------------------------------------------------------
+
+        TGraphErrors* graph_fit_bg = new TGraphErrors(
+            integral_background[q].size(),
+            w_bg_fit[q].data(),
+            integral_background[q].data(),
+            nullptr,
+            integral_background_error[q].data()
+        );
+
+        graph_fit_bg->SetTitle(namegraph);
+        graph_fit_bg->SetMinimum(0);
+        graph_fit_bg->SetMarkerSize(10.0);
+        graph_fit_bg->GetXaxis()->SetNdivisions(20, kTRUE);
+
+        // ---------------------------------------------------------
+        // Extrapolation function
+        // ---------------------------------------------------------
+
+        int w_reper =
+            extrapolation_results[q].w_reper;
+
+        TF1* fitFunction = new TF1(
+            Form("fitFunction_draw_q%d", q),
+            Form(
+                "[0]*(x-%d)*(x-%d)+[1]*(x-%d)",
+                w_reper,
+                w_reper,
+                w_reper
+            ),
+            w_reper - 0.1,
+            cfg.w_fit_max
+        );
+
+        fitFunction->SetParameter(
+            0,
+            extrapolation_results[q].A
+        );
+
+        fitFunction->SetParameter(
+            1,
+            extrapolation_results[q].B
+        );
+
+        // ---------------------------------------------------------
+        // Draw
+        // ---------------------------------------------------------
+
+        graph_fit_bg->Draw("AP");
+        fitFunction->Draw("P SAME");
+
+        graph_fit_bg->GetXaxis()->SetRangeUser(0, 20);
+        graph_fit_bg->GetYaxis()->SetRangeUser(
+            0,
+            fitFunction->Eval(cfg.w_fit_max) * 1.1
+        );
+
+        // ---------------------------------------------------------
+        // Fit information
+        // ---------------------------------------------------------
+
+        TPaveText* pave = new TPaveText(
+            0.7,
+            0.4,
+            0.9,
+            0.6,
+            "NDC"
+        );
+
+        pave->SetFillColor(0);
+        pave->SetTextAlign(12);
+        pave->SetTextSize(0.03);
+
+        pave->AddText(
+            Form(
+                "A*(x - %d)^{2}+B*(x-%d)",
+                w_reper,
+                w_reper
+            )
+        );
+
+        pave->AddText("Fit results:");
+
+        pave->AddText(
+            Form(
+                "   A = %.5f",
+                extrapolation_results[q].A
+            )
+        );
+
+        pave->AddText(
+            Form(
+                "   B = %.5f",
+                extrapolation_results[q].B
+            )
+        );
+
+        pave->Draw("SAME");
+
+        // ---------------------------------------------------------
+        // Save page
+        // ---------------------------------------------------------
+
+        canvas_fit_bg->Update();
+        canvas_fit_bg->Print(pdfFileName);
+
+        delete pave;
+        delete fitFunction;
+        delete graph_fit_bg;
+    }
+
+    canvas_fit_bg->Print(pdfFileName + "]");
+
+    delete canvas_fit_bg;
+}
+
 void DrawMissingMassFit(
     const std::vector<std::vector<TH1F*>>& hist,
     const std::vector<std::vector<FitResult>>& fit_results,
@@ -679,13 +679,15 @@ void DrawMissingMassFit(
             800,
             600
         );
+        
+        TString pdfFileName = TString::Format("%s_in_Q2_bin_%d.pdf", pdfFilePrefix, q + 1);
 
-        TString pdfFileName =
-            Form(
-                "%s_in_Q2_bin_%d.pdf",
-                pdfFilePrefix,
-                q + 1
-            );
+        // TString pdfFileName =
+        //     Form(
+        //         "%s_in_Q2_bin_%d.pdf",
+        //         pdfFilePrefix,
+        //         q + 1
+        //     );
 
         canvas->Print(pdfFileName + "[");
 
@@ -967,13 +969,47 @@ void DrawMissingMassFit(
     }
 }
 
+YieldsOutput ProcessTopology(
+    const std::vector<std::vector<TH1F*>>& signal_hists,                     
+    const std::vector<std::vector<TH1F*>>& bg_hists, 
+    const YieldsConfig& cfg, 
+    const char* diag_prefix) 
+{
+    const auto& actual_bg_hists = (!bg_hists.empty()) ? bg_hists : signal_hists;
+
+    std::cout << "Processing topology: " << diag_prefix << std::endl;
+    std::cout << "---> FitBackground" << std::endl;
+    auto fit_results = FitBackground(actual_bg_hists, cfg);
+
+    std::cout << "---> ExtrapolateBackground" << std::endl;
+    auto [integral_background, integral_background_error, w_bg_fit, extrapolation_results] = 
+        ExtrapolateBackground(fit_results, cfg);
+
+    TString bg_pdf_path = TString::Format("results/extrapolating_bg_%s.pdf", diag_prefix);
+    TString fit_pdf_prefix = TString::Format("results/%s_fit", diag_prefix);
+
+    std::cout << "---> Drawing Background Extrapolation" << std::endl;
+    DrawBackgroundExtrapolation(
+        integral_background, integral_background_error, w_bg_fit, 
+        extrapolation_results, cfg, bg_pdf_path
+    );
+
+    std::cout << "---> Drawing Missing Mass Fit" << std::endl;
+    DrawMissingMassFit(
+        actual_bg_hists, fit_results, fit_pdf_prefix.Data(), cfg // Передаем .Data() безопасной строки
+    );
+
+    std::cout << "---> CalculateYields" << std::endl;
+    return CalculateYields(signal_hists, actual_bg_hists, fit_results, integral_background, cfg);
+}
+
 void yields_pdf(void) 
 {
     gErrorIgnoreLevel = kWarning;
 	gROOT->SetBatch(kTRUE); 
 
     TFile *missing_pip_file = TFile::Open("interim/mm_pip_hists_m_pip.root");
-    TFile *fullly_exclusive_file = TFile::Open("interim/mm_pip_hists_m_0.root");
+    TFile *fully_exclusive_file = TFile::Open("interim/mm_pip_hists_m_0.root");
 
     int q_min = 0; int q_max = 5;
     int w_min = 0; int w_max = 99;
@@ -984,143 +1020,24 @@ void yields_pdf(void)
         q_min, q_max, w_min, w_max
     );
 
-    auto fullly_exclusive_hist = LoadHistograms(
-        fullly_exclusive_file, 
+    auto fully_exclusive_hist = LoadHistograms(
+        fully_exclusive_file, 
         "MMpiplus_from_MM0_topology", 
         q_min, q_max, w_min, w_max
     );
 
-//////////////Missing Pi+/////////////////////////////////////////////////////
-
-    std::cout << "Missing Pi+" << std::endl;
-
+    // Топология 1: Missing Pi+ (Сигнал и фон — одна гистограмма)
     YieldsConfig missing_pip_cfg;
+    auto missing_pip = ProcessTopology(missing_pip_hist, {}, missing_pip_cfg, "missing_pip");
 
-    std::cout << "    FitBackground" << std::endl;
-
-    auto missing_pip_fit_results = FitBackground(
-        missing_pip_hist,
-        missing_pip_cfg
-    );
-
-    std::cout << "    ExtrapolateBackground" << std::endl;
-
-    auto [
-        integral_background, 
-        integral_background_error, 
-        w_bg_fit, 
-        missing_pip_extrapolation_results
-    ] = 
-    ExtrapolateBackground(
-        missing_pip_fit_results,
-        missing_pip_cfg
-    );
-
-    std::cout << "    CalculateYields" << std::endl;
-
-    auto [
-        w_vector,
-        w_vector_error,
-        intergral_signal_excut,
-        intergral_signal_excut_error,
-        intergral_signal,
-        intergral_signal_error
-    ] =
-    CalculateYields(
-        missing_pip_hist,
-        missing_pip_hist,
-        missing_pip_fit_results,
-        integral_background,
-        missing_pip_cfg
-    );
-
-    std::cout << "    DrawBackgroundExtrapolation" << std::endl;
-
-    DrawBackgroundExtrapolation(
-        integral_background,
-        integral_background_error,
-        w_bg_fit,
-        missing_pip_extrapolation_results,
-        missing_pip_cfg,
-        "results/extrapolating_bg.pdf"
-    );
-
-    std::cout << "    DrawMissingMassFit" << std::endl;
-
-    DrawMissingMassFit(
-        missing_pip_hist, 
-        missing_pip_fit_results, 
-        "results/LogNormalFit",
-        missing_pip_cfg
-    );
-
-//////////////Fully exclusive//////////////////////////////////////////////////////////////////////////////
-    std::cout << "Fully exclusive" << std::endl;
-
-    YieldsConfig fully_exclusive_bg_cfg;
-    fully_exclusive_bg_cfg.signal_sigma = 0.05;
-    fully_exclusive_bg_cfg.xmin = -0.1;
-    fully_exclusive_bg_cfg.xmax_high = 0.3;
-    fully_exclusive_bg_cfg.bg_ampl_bin = 50;
-    fully_exclusive_bg_cfg.bg_ampl_factor = 1.0;
-
-    std::cout << "    FitBackground" << std::endl;
-
-    auto fully_exclusive_fit_results = FitBackground(
-        fullly_exclusive_hist,
-        fully_exclusive_bg_cfg
-    );
-
-    std::cout << "    ExtrapolateBackground" << std::endl;
-
-    auto [
-        background_MM0,
-        background_error_MM0,
-        w_bg_fit_MM0, 
-        fully_exclusive_extrapolation_results
-    ] =
-    ExtrapolateBackground(
-        fully_exclusive_fit_results,
-        fully_exclusive_bg_cfg
-    );
-
-    std::cout << "    CalculateYields" << std::endl;
-
-    auto [
-        w_vector_MM0,
-        w_vector_MM0_error,
-        intergral_signal_excut_MM0,
-        intergral_signal_excut_MM0_error,
-        intergral_signal_4th_method_MM0,
-        intergral_signal_4th_method_MM0_error
-    ] =
-    CalculateYields(
-        missing_pip_hist,
-        fullly_exclusive_hist,
-        fully_exclusive_fit_results,
-        background_MM0,
-        fully_exclusive_bg_cfg
-    );
-
-    std::cout << "    DrawBackgroundExtrapolation" << std::endl;
-
-    DrawBackgroundExtrapolation(
-        background_MM0,
-        background_error_MM0,
-        w_bg_fit_MM0,
-        fully_exclusive_extrapolation_results,
-        fully_exclusive_bg_cfg,
-        "results/extrapolating_bg_MM0.pdf"
-    );
-
-    std::cout << "    DrawMissingMassFit" << std::endl;
-
-    DrawMissingMassFit(
-        fullly_exclusive_hist, 
-        fully_exclusive_fit_results, 
-        "results/MMpiplus_from_MM0_topology_fit",
-        fully_exclusive_bg_cfg
-    );
+    // Топология 2: Fully exclusive (Сигнал из первой, форма фона из второй)
+    YieldsConfig fully_exclusive_cfg;
+    fully_exclusive_cfg.signal_sigma = 0.05;
+    fully_exclusive_cfg.xmin = -0.1;
+    fully_exclusive_cfg.xmax_high = 0.3;
+    fully_exclusive_cfg.bg_ampl_bin = 50;
+    fully_exclusive_cfg.bg_ampl_factor = 1.0;
+    auto fully_exclusive = ProcessTopology(missing_pip_hist, fully_exclusive_hist, fully_exclusive_cfg, "fully_exclusive");
 
 //////////////GRAPHS/////////////////////////////////////////////////////////////////////////////
 
@@ -1146,7 +1063,13 @@ void yields_pdf(void)
 
         TMultiGraph *mg = new TMultiGraph();
 	
-        TGraphErrors *graph_signal = new TGraphErrors(intergral_signal[q].size(), &w_vector[q][0], &intergral_signal[q][0], NULL, &intergral_signal_error[q][0]);
+        TGraphErrors *graph_signal = new TGraphErrors(
+            missing_pip.integral_signal[q].size(), 
+            &missing_pip.w_vector[q][0], 
+            &missing_pip.integral_signal[q][0], 
+            NULL, 
+            &missing_pip.integral_error[q][0] // Проверьте имя поля: integral_error или integral_signal_error
+        );
         graph_signal -> SetTitle(namegraph);
         graph_signal -> SetMinimum(0);
         graph_signal -> SetMarkerSize(1);
@@ -1154,7 +1077,13 @@ void yields_pdf(void)
 
         mg -> Add(graph_signal);
 
-        TGraphErrors *graph_signal_excut = new TGraphErrors(intergral_signal_excut[q].size(), &w_vector[q][0], &intergral_signal_excut[q][0], NULL, &intergral_signal_excut_error[q][0]);
+        TGraphErrors *graph_signal_excut = new TGraphErrors(
+            missing_pip.integral_signal_excut[q].size(), 
+            &missing_pip.w_vector[q][0], 
+            &missing_pip.integral_signal_excut[q][0], 
+            NULL, 
+            &missing_pip.integral_signal_excut_error[q][0]
+        );
         graph_signal_excut -> SetTitle(namegraph);
         graph_signal_excut -> SetMinimum(0);
         graph_signal_excut -> SetMarkerSize(1);
@@ -1163,7 +1092,13 @@ void yields_pdf(void)
 
         mg -> Add(graph_signal_excut);
 
-        TGraphErrors *graph_signal_4 = new TGraphErrors(intergral_signal_4th_method_MM0[q].size(), &w_vector_MM0[q][0], &intergral_signal_4th_method_MM0[q][0], NULL, &intergral_signal_4th_method_MM0_error[q][0]);
+        TGraphErrors *graph_signal_4 = new TGraphErrors(
+            fully_exclusive.integral_signal[q].size(), 
+            &fully_exclusive.w_vector[q][0], 
+            &fully_exclusive.integral_signal[q][0], // В структуре fully_exclusive это поле содержит нужный интеграл сигнала метода MM0
+            NULL, 
+            &fully_exclusive.integral_error[q][0]
+        );
         graph_signal_4 -> SetTitle(namegraph);
         graph_signal_4 -> SetMinimum(0);
         graph_signal_4 -> SetMarkerSize(1);
