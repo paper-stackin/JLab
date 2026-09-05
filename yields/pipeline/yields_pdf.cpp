@@ -964,10 +964,10 @@ YieldsOutput ProcessTopology(
     const auto& actual_bg_hists = (!bg_hists.empty()) ? bg_hists : signal_hists;
 
     std::cout << "Processing topology: " << diag_prefix << std::endl;
-    std::cout << "---> FitBackground" << std::endl;
+    std::cout << "---> Fitting Background" << std::endl;
     auto fit_results = FitBackground(actual_bg_hists, cfg);
 
-    std::cout << "---> ExtrapolateBackground" << std::endl;
+    std::cout << "---> Extrapolating Background" << std::endl;
     auto [integral_background, integral_background_error, w_bg_fit, extrapolation_results] = 
         ExtrapolateBackground(fit_results, cfg);
 
@@ -985,8 +985,93 @@ YieldsOutput ProcessTopology(
         actual_bg_hists, fit_results, fit_pdf_prefix.Data(), cfg // Передаем .Data() безопасной строки
     );
 
-    std::cout << "---> CalculateYields" << std::endl;
+    std::cout << "---> Calculating Yields" << std::endl;
     return CalculateYields(signal_hists, actual_bg_hists, fit_results, integral_background, cfg);
+}
+
+void DrawYields(
+    YieldsOutput missing_pip,
+    YieldsOutput fully_exclusive
+)
+{
+    std::cout << "Drawing Yields Distribution" << std::endl;
+
+    TCanvas *canvas_yields = new TCanvas("canvas_yields", "Canvas Title", 800, 600);
+    TString pdfFileName_graph = Form("results/Yields_in_all_Q2_bins.pdf");  // Генерируем имя файла на основе q
+    canvas_yields->Print(pdfFileName_graph + "[");
+
+    for (int q = 0; q < 6; ++q) 
+    {
+	    double Q2_min_val, Q2_max_val;
+
+	    if(q == 0)  {Q2_min_val = 0.5, Q2_max_val = 0.7;}
+	    if(q == 1)  {Q2_min_val = 0.7, Q2_max_val = 1;}
+	    if(q == 2)  {Q2_min_val = 1, Q2_max_val = 1.4;}
+	    if(q == 3)  {Q2_min_val = 1.4, Q2_max_val = 2;}
+	    if(q == 4)  {Q2_min_val = 2, Q2_max_val = 3;}
+	    if(q == 5)  {Q2_min_val = 3, Q2_max_val = 5.5;}
+
+	    char namegraph[256];
+        sprintf(namegraph, "Yield for Q^{2} #in [%g, %g] GeV^{2}; W, GeV; Yield", Q2_min_val, Q2_max_val);
+
+        TMultiGraph *mg = new TMultiGraph();
+        mg->SetTitle(namegraph);
+
+        TGraphErrors *yield_without_bg_estimation = new TGraphErrors(
+            missing_pip.integral_signal_excut[q].size(), 
+            &missing_pip.w_vector[q][0], 
+            &missing_pip.integral_signal_excut[q][0], 
+            NULL, 
+            &missing_pip.integral_signal_excut_error[q][0]
+        );
+        yield_without_bg_estimation->SetMarkerSize(1);
+        yield_without_bg_estimation->SetLineColor(3);
+        yield_without_bg_estimation->Draw("SAME");
+
+        mg->Add(yield_without_bg_estimation);
+	
+        TGraphErrors *yield_with_bg_from_mpip = new TGraphErrors(
+            missing_pip.integral_signal[q].size(), 
+            &missing_pip.w_vector[q][0], 
+            &missing_pip.integral_signal[q][0], 
+            NULL, 
+            &missing_pip.integral_error[q][0] // Проверьте имя поля: integral_error или integral_signal_error
+        );
+        yield_with_bg_from_mpip->SetMarkerSize(1);
+        yield_with_bg_from_mpip->Draw("AC");
+
+        mg->Add(yield_with_bg_from_mpip);
+
+        TGraphErrors *yield_with_bg_from_fe = new TGraphErrors(
+            fully_exclusive.integral_signal[q].size(), 
+            &fully_exclusive.w_vector[q][0], 
+            &fully_exclusive.integral_signal[q][0], 
+            NULL, 
+            &fully_exclusive.integral_error[q][0]
+        );
+        yield_with_bg_from_fe->SetMarkerSize(1);
+        yield_with_bg_from_fe->SetLineColor(6);
+        yield_with_bg_from_fe->Draw("SAME");
+
+        mg->Add(yield_with_bg_from_fe);
+
+        // Нарисовать график
+        mg->Draw("AC");
+
+        TLegend* legend = new TLegend(0.55, 0.7, 0.9, 0.9);
+        legend->SetTextSize(0.03);
+        legend->AddEntry(yield_without_bg_estimation, "Without bg estimation", "l");
+        legend->AddEntry(yield_with_bg_from_mpip, "Bg from M#pi^{+} topology", "l");
+        legend->AddEntry(yield_with_bg_from_fe, "Scaled bg from FE topology", "l");
+
+        legend->Draw("SAME");
+
+        canvas_yields->Update();
+        canvas_yields->Print(pdfFileName_graph);
+    }
+
+    canvas_yields->Print(pdfFileName_graph + "]"); // Закрываем текущий PDF-файл
+    delete canvas_yields;
 }
 
 void yields_pdf(void) 
@@ -1014,7 +1099,10 @@ void yields_pdf(void)
 
     // Топология 1: Missing Pi+ (Сигнал и фон — одна гистограмма)
     YieldsConfig missing_pip_cfg;
-    auto missing_pip = ProcessTopology(missing_pip_hist, {}, missing_pip_cfg, "missing_pip");
+
+    auto missing_pip = ProcessTopology(
+        missing_pip_hist, {}, missing_pip_cfg, "missing_pip"
+    );
 
     // Топология 2: Fully exclusive (Сигнал из первой, форма фона из второй)
     YieldsConfig fully_exclusive_cfg;
@@ -1023,97 +1111,13 @@ void yields_pdf(void)
     fully_exclusive_cfg.xmax_high = 0.3;
     fully_exclusive_cfg.bg_ampl_bin = 50;
     fully_exclusive_cfg.bg_ampl_factor = 1.0;
-    auto fully_exclusive = ProcessTopology(missing_pip_hist, fully_exclusive_hist, fully_exclusive_cfg, "fully_exclusive");
 
-//////////////GRAPHS/////////////////////////////////////////////////////////////////////////////
+    auto fully_exclusive = ProcessTopology(
+        missing_pip_hist, fully_exclusive_hist, fully_exclusive_cfg, "fully_exclusive"
+    );
+    
+    // Графики выходов
+    DrawYields(missing_pip, fully_exclusive);
 
-    std::cout << "GRAPHS" << std::endl;
-
-    TCanvas *canvas_yields = new TCanvas("canvas_yields", "Canvas Title", 800, 600);
-    TString pdfFileName_graph = Form("results/Yields_in_all_Q2_bins.pdf");  // Генерируем имя файла на основе q
-    canvas_yields->Print(pdfFileName_graph + "[");
-
-    for (int q = 0; q < 6; ++q) 
-    {
-	    double Q2_min_val, Q2_max_val;
-
-	    if(q == 0)  {Q2_min_val = 0.5, Q2_max_val = 0.7;}
-	    if(q == 1)  {Q2_min_val = 0.7, Q2_max_val = 1;}
-	    if(q == 2)  {Q2_min_val = 1, Q2_max_val = 1.4;}
-	    if(q == 3)  {Q2_min_val = 1.4, Q2_max_val = 2;}
-	    if(q == 4)  {Q2_min_val = 2, Q2_max_val = 3;}
-	    if(q == 5)  {Q2_min_val = 3, Q2_max_val = 5.5;}
-
-	    char namegraph[256];
-        sprintf(namegraph, "Yield for Q^{2} #in [%g, %g] GeV^{2}; W, GeV; Yield", Q2_min_val, Q2_max_val);
-
-        TMultiGraph *mg = new TMultiGraph();
-	
-        TGraphErrors *graph_signal = new TGraphErrors(
-            missing_pip.integral_signal[q].size(), 
-            &missing_pip.w_vector[q][0], 
-            &missing_pip.integral_signal[q][0], 
-            NULL, 
-            &missing_pip.integral_error[q][0] // Проверьте имя поля: integral_error или integral_signal_error
-        );
-        graph_signal -> SetTitle(namegraph);
-        graph_signal -> SetMinimum(0);
-        graph_signal -> SetMarkerSize(1);
-        graph_signal -> Draw("AC");
-
-        mg -> Add(graph_signal);
-
-        TGraphErrors *graph_signal_excut = new TGraphErrors(
-            missing_pip.integral_signal_excut[q].size(), 
-            &missing_pip.w_vector[q][0], 
-            &missing_pip.integral_signal_excut[q][0], 
-            NULL, 
-            &missing_pip.integral_signal_excut_error[q][0]
-        );
-        graph_signal_excut -> SetTitle(namegraph);
-        graph_signal_excut -> SetMinimum(0);
-        graph_signal_excut -> SetMarkerSize(1);
-        graph_signal_excut -> SetLineColor(3);
-        graph_signal_excut -> Draw("SAME");
-
-        mg -> Add(graph_signal_excut);
-
-        TGraphErrors *graph_signal_4 = new TGraphErrors(
-            fully_exclusive.integral_signal[q].size(), 
-            &fully_exclusive.w_vector[q][0], 
-            &fully_exclusive.integral_signal[q][0], // В структуре fully_exclusive это поле содержит нужный интеграл сигнала метода MM0
-            NULL, 
-            &fully_exclusive.integral_error[q][0]
-        );
-        graph_signal_4 -> SetTitle(namegraph);
-        graph_signal_4 -> SetMinimum(0);
-        graph_signal_4 -> SetMarkerSize(1);
-        graph_signal_4 -> SetLineColor(6);
-        graph_signal_4 -> Draw("SAME");
-
-        mg -> Add(graph_signal_4);
-        mg -> SetTitle(namegraph);
-        mg -> SetMinimum(0);
-        mg -> GetXaxis() -> SetTitle("W, GeV");
-        mg -> GetYaxis() -> SetTitle("Yield");
-
-        // Нарисовать график
-        mg -> Draw("AC");
-
-        TLegend* legend = new TLegend(0.55, 0.7, 0.9, 0.9);
-        legend -> SetTextSize(0.03);
-        legend -> AddEntry(graph_signal_excut, "Without bg estimation", "l");
-        legend -> AddEntry(graph_signal, "Bg from M#pi^{+} topology", "l");
-        legend -> AddEntry(graph_signal_4, "Scaled bg from FE topology", "l");
-
-        legend->Draw("SAME");
-
-        canvas_yields -> Update();
-        canvas_yields -> Print(pdfFileName_graph);
-    }
-
-    canvas_yields -> Print(pdfFileName_graph + "]"); // Закрываем текущий PDF-файл
-    delete canvas_yields;
-
-    gSystem -> Exit(0);
+    gSystem->Exit(0);
 }
