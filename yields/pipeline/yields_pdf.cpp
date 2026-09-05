@@ -1045,7 +1045,7 @@ void yields_pdf(void)
 	    if(q == 5)  {Q2_min_val = 3, Q2_max_val = 5.5;}
 
 	    char namegraph[256];
-        sprintf(namegraph, "Yield VS W for Q2 in [%g,%g] GeV^2; W, GeV; Yield", Q2_min_val, Q2_max_val);
+        sprintf(namegraph, "Yield for Q^{2} #in [%g, %g] GeV^{2}; W, GeV; Yield", Q2_min_val, Q2_max_val);
 
         TMultiGraph *mg = new TMultiGraph();
 	
@@ -1100,11 +1100,11 @@ void yields_pdf(void)
         // Нарисовать график
         mg -> Draw("AC");
 
-        TLegend* legend = new TLegend(0.6, 0.6, 0.9, 0.9);
+        TLegend* legend = new TLegend(0.55, 0.7, 0.9, 0.9);
         legend -> SetTextSize(0.03);
-        legend -> AddEntry(graph_signal, "New lognorm method", "l");
-        legend -> AddEntry(graph_signal_excut, "Entries within ex.cut", "l");
-        legend -> AddEntry(graph_signal_4, "Scaled bg from MM0 topology", "l");
+        legend -> AddEntry(graph_signal_excut, "Without bg estimation", "l");
+        legend -> AddEntry(graph_signal, "Bg from M#pi^{+} topology", "l");
+        legend -> AddEntry(graph_signal_4, "Scaled bg from FE topology", "l");
 
         legend->Draw("SAME");
 
