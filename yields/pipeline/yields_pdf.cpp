@@ -380,32 +380,42 @@ YieldsOutput CalculateYields(
                   );
 
             double delta_flux =
+                flux * 
                 sqrt(
                     pow(
-                        alpha / (4.0 * 3.1415)
-                        * 1.0 /
-                          (M_prot * M_prot * E_beam * E_beam)
-                        * (
-                            (3.0 * w_mid_val * w_mid_val
-                             - M_prot * M_prot)
-                            / (2.0 * q2_mid_val)
-                            - 1.0
-                          ),
+                        (3.0 * w_mid_val * w_mid_val - M_prot * M_prot) /
+                        (w_mid_val * w_mid_val - M_prot * M_prot),
                         2
-                    ) * pow(del_w, 2)
+                    ) * pow(del_w / w_mid_val, 2)
                     +
-                    pow(
-                        alpha / (4.0 * 3.1415)
-                        * 1.0 /
-                          (M_prot * M_prot * E_beam * E_beam)
-                        * (
-                            (w_mid_val * w_mid_val
-                             - M_prot * M_prot)
-                            / (2.0 * q2_mid_val)
-                          ),
-                        2
-                    ) * pow(del_q2, 2)
+                    pow(del_q2 / q2_mid_val, 2)
                 );
+                // sqrt(
+                //     pow(
+                //         alpha / (4.0 * 3.1415)
+                //         * 1.0 /
+                //           (M_prot * M_prot * E_beam * E_beam)
+                //         * (
+                //             (3.0 * w_mid_val * w_mid_val
+                //              - M_prot * M_prot)
+                //             / (2.0 * q2_mid_val)
+                //             - 1.0
+                //           ),
+                //         2
+                //     ) * pow(del_w, 2)
+                //     +
+                //     pow(
+                //         alpha / (4.0 * 3.1415)
+                //         * 1.0 /
+                //           (M_prot * M_prot * E_beam * E_beam)
+                //         * (
+                //             (w_mid_val * w_mid_val
+                //              - M_prot * M_prot)
+                //             / (2.0 * q2_mid_val)
+                //           ),
+                //         2
+                //     ) * pow(del_q2, 2)
+                // );
 
             // N_ex_cut from signal histogram
             double N_ex_cut = hist_signal[q][w]->Integral(25, 40);
