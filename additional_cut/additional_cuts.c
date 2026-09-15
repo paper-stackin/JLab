@@ -1,3 +1,8 @@
+double EvaluatePolynomial(const double* p, double x)
+{
+    return p[0] + x * (p[1] + x * (p[2] + x * p[3]));
+}
+
 bool PCalFiducialCut(
     int cal_layer_e,
     int cal_sect_e,
@@ -122,7 +127,7 @@ bool MECut(
 
 void additional_cuts()
 {
-    TFile* file_in = TFile::Open("home/stepan/downloads/missing_pip_clas12.root", "READ");
+    TFile* file_in = TFile::Open("/home/stepan/downloads/missing_pip_clas12.root", "READ");
     TTree* tree_in = (TTree*)file_in->Get("MMpiptree");
     
     // Read branches
@@ -164,17 +169,42 @@ void additional_cuts()
     tree_in->SetBranchAddress("status_pim", &status_pim);
     
     // Output
-    TFile* file_out = TFile::Open("output.root", "RECREATE");
+    TFile* file_out = TFile::Open("missing_pip_clas12_with_additional_cuts.root", "RECREATE");
     TTree* tree_out = tree_in->CloneTree(0);
 
     // Event loop
     TLorentzVector el_initial(0, 0, 6.535, 6.535);
     TLorentzVector p_initial(0, 0, 0, 0.938);
+    TLorentzVector el_final;
+    TLorentzVector p_final;
+    TLorentzVector pi_minus;
+
+    float ME_cuts[6][64];
+
+    std::ifstream f("/home/stepan/root_progs/2pion_new/missing_pip_abs_momentum_dist/ME_cuts_08.txt");
+
+    for (int i = 0; i < 6; ++i)
+    {
+        std::string line;
+        std::getline(f, line);
+
+        std::istringstream iss(line);
+
+        for (int j = 0; j < 64; ++j)
+            iss >> ME_cuts[i][j];
+    }
+
+    f.close();
 
     Long64_t n_entries = tree_in->GetEntries();
 
     for (Long64_t i = 0; i < n_entries; i++)
     {
+        if (i % 1000 == 0)
+        {
+            std::cout << i /1000 << "/" << n_entries / 1000 << std::endl;
+        }
+        
         tree_in->GetEntry(i);
 
         el_final.SetXYZM(px_e, py_e, pz_e, 0.);
@@ -194,23 +224,6 @@ void additional_cuts()
             continue;
         }
 
-        float ME_cuts[6][64];
-
-        std::ifstream f("ME_cuts_08.txt");
-
-        for (int i = 0; i < 6; ++i)
-        {
-            std::string line;
-            std::getline(f, line);
-
-            std::istringstream iss(line);
-
-            for (int j = 0; j < 64; ++j)
-                iss >> ME_cuts[i][j];
-        }
-
-        f.close();
-
         if (!MECut(
                 el_initial,
                 el_final,
@@ -224,11 +237,9 @@ void additional_cuts()
 
         tree_out->Fill();
     }
-
-
     
     // Save
-    
+    Long64_t n_output = tree_out->GetEntries();
 
     file_out->cd();
     tree_out->Write();
@@ -237,5 +248,5 @@ void additional_cuts()
     file_in->Close();
 
     std::cout << "Input events:  " << n_entries << std::endl;
-    std::cout << "Output events: " << tree_out->GetEntries() << std::endl;
+    std::cout << "Output events: " << n_output << std::endl;
 }
