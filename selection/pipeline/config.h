@@ -4,15 +4,18 @@
 #include <string>
 
 struct FileConfig {
-    std::string input_prefix = "/volatile/clas12/osg/savkin/11847/output-11847-";
-    int input_start = 0;
-    int input_end = 9999;
+    // std::string input_prefix = "/volatile/clas12/osg/savkin/11847/output-11847-";
+    // int input_start = 0;
+    // int input_end = 9999;
+    // std::vector<int> files_to_skip = {6492};
 
-    // std::string input_prefix = "/cache/clas12/rg-k/production/recon/fall2018/torus+1/6535MeV/pass2/v0/dst/train/skim30/skim30_00";
-    // int input_start = 5860;
-    // int input_end = 6000;
+    std::string input_prefix = "/cache/clas12/rg-k/production/recon/fall2018/torus+1/6535MeV/pass2/v0/dst/train/skim30/skim30_00";
+    int input_start = 5860;
+    int input_end = 6000;
+    std::vector<int> files_to_skip = {};
     
-    std::string output = "missing_pip_simulation.root";
+    // std::string output = "missing_pip_simulation.root";
+    std::string output = "missing_pip_clas12.root";
     std::string tree_name = "MMpiptree";
     std::string tree_title = "Double pion chanel";
 };

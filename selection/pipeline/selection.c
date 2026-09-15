@@ -75,6 +75,13 @@ void selection()
     int status_p, status_pim;
     float weight;   // Weight (used in simulation)
 
+    int cal_sect_e, cal_layer_e; // Calorimeter electron values
+    float cal_x_e, cal_y_e;
+
+    float time_e, path_e;
+    float time_p, path_p;
+    float time_pim, path_pim;
+
     TFile* hfile =  new TFile(cfg.file.output.c_str(), "RECREATE");
 
     // Initializing TTree
@@ -86,15 +93,33 @@ void selection()
     tree.Branch("px_e", &px_e, "px_e/F");
     tree.Branch("py_e", &py_e, "py_e/F");
     tree.Branch("pz_e", &pz_e, "pz_e/F");
+
+    tree.Branch("cal_sect_e", &cal_sect_e, "cal_sect_e/I");
+    tree.Branch("cal_layer_e", &cal_layer_e, "cal_layer_e/I");
+    tree.Branch("cal_x_e", &cal_x_e, "cal_x_e");
+    tree.Branch("cal_y_e", &cal_y_e, "cal_y_e");
+
+    tree.Branch("time_e", &time_e, "time_e/F");
+    tree.Branch("path_e", &path_e, "path_e/F");
+
     // Final proton
     tree.Branch("px_p", &px_p, "px_p/F");
     tree.Branch("py_p", &py_p, "py_p/F");
     tree.Branch("pz_p", &pz_p, "pz_p/F");
+
+    tree.Branch("time_p", &time_p, "time_p/F");
+    tree.Branch("path_p", &path_p, "path_p/F");
+
     tree.Branch("status_p", &status_p, "status_p/I");
+
     // Pi minus
     tree.Branch("px_pim", &px_pim, "px_pim/F");
     tree.Branch("py_pim", &py_pim, "py_pim/F");
     tree.Branch("pz_pim", &pz_pim, "pz_pim/F");
+
+    tree.Branch("time_pim", &time_pim, "time_pim/F");
+    tree.Branch("path_pim", &path_pim, "path_pim/F");
+
     tree.Branch("status_pim", &status_pim, "status_pim/I");
 
     if(cfg.use_weights) {
@@ -106,6 +131,18 @@ void selection()
     std::vector<std::string> data;
     for (int i = cfg.file.input_start; i <= cfg.file.input_end; i++)
     {
+        if (
+            std::find(
+                cfg.file.files_to_skip.begin(),
+                cfg.file.files_to_skip.end(),
+                i
+            ) != cfg.file.files_to_skip.end()
+        )
+        {
+            std::cout << "Skipping file: " << i << std::endl;
+            continue;
+        }
+
         data.push_back(cfg.file.input_prefix + std::__cxx11::to_string(i) + ".hipo");
     } 
 
@@ -228,6 +265,63 @@ void selection()
                 else if (ecal_layer == 7)
                 {
                     EC_out = ecal_energy;
+                }
+            }
+
+            cal_sect_e = -1;
+            cal_layer_e = -1;
+            cal_x_e = 0;
+            cal_y_e = 0;
+
+            for (int i = 0; i < ECAL.getRows(); i++)
+            {
+                int layer = ECAL.getInt("layer", i);
+
+                if (layer == 1)
+                {
+                    int pindex = ECAL.getShort("pindex", i);
+
+                    if (pindex == 0)
+                    {
+                        cal_sect_e = ECAL.getInt("sector", i);
+                        cal_layer_e = ECAL.getInt("layer", i);
+                        cal_x_e = ECAL.getFloat("x", i);
+                        cal_y_e = ECAL.getFloat("y", i);
+                    }
+                }
+            }
+
+            time_e = -1;
+            path_e = -1;
+            time_p = -1;
+            path_p = -1;
+            time_pim = -1;
+            path_pim = -1;
+
+            for (int i = 0; i < Scint.getRows(); i++)
+            {
+                int pindex = Scint.getInt("pindex", i);
+                int detector = Scint.getInt("detector", i);
+
+                double time = Scint.getFloat("time", i);
+                double path = Scint.getFloat("path", i);
+
+                if (pindex == el_index)
+                {
+                    time_e = time;
+                    path_e = path;
+                }
+
+                if (pindex == p_index)
+                {
+                    time_p = time;
+                    path_p = path;
+                }
+
+                if (pindex == pim_index)
+                {
+                    time_pim = time;
+                    path_pim = path;
                 }
             }
 
