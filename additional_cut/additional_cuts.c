@@ -42,6 +42,82 @@ bool PCalFiducialCut(
     return y > y_upper || y < y_lower || r < 150;
 }
 
+bool DeltaTCut(
+    const TLorentzVector& p_final,
+    const TLorentzVector& pi_minus,
+    float time_e, float path_e,
+    float time_p, float path_p,
+    float time_pim, float path_pim,
+    int status_p, int status_pim
+)
+{
+    const double p_FD[2][4] = {
+        {-1.81993, 1.56695, -0.537688, 0.0567944},
+        {2.05426, -1.99292, 0.697655, -0.0749161}
+    };
+
+    const double p_CD[2][4] = {
+        {-1.07061, 0.725577, -0.322277, 0.0543469},
+        {0.991423, -0.663469, 0.189848, -0.0114122}
+    };
+
+    const double pim_FD[2][4] = {
+        {-0.47698, -0.115347, 0.0350752, -0.00383088},
+        {0.471637, 0.102206, -0.0284684, 0.00287855}
+    };
+
+    const double pim_CD[2][4] = {
+        {-0.373887, -0.365277, 0.256151, -0.0558962},
+        {0.321532, 0.47643, -0.350448, 0.0829287}
+    };
+                
+    double p_mom = p_final.P();
+    double pim_mom = pi_minus.P();
+
+    double p_beta = p_final.Beta();
+    double pim_beta = pi_minus.Beta();
+
+    if(p_beta <= 0 || pim_beta <= 0) return false;
+
+    double c_light = 29.9792458;
+
+    double t_e = time_e - path_e / c_light;
+    double p_delta_t = path_p / p_beta / c_light - time_p + t_e;
+    double pim_delta_t = path_pim / pim_beta / c_light - time_pim + t_e;
+    
+    bool proton = false, piminus = false;
+
+    if (2000 <= status_p && status_p < 4000)
+    {
+        const double t_left = EvaluatePolynomial(p_FD[0], p_mom);
+        const double t_right = EvaluatePolynomial(p_FD[1], p_mom);
+        proton = p_delta_t > t_left && p_delta_t < t_right;
+    } 
+
+    if (4000 <= status_p && status_p < 8000) 
+    {
+        const double t_left = EvaluatePolynomial(p_CD[0], p_mom);
+        const double t_right = EvaluatePolynomial(p_CD[1], p_mom);
+        proton = p_delta_t > t_left && p_delta_t < t_right;
+    }
+
+    if (2000 <= status_pim && status_pim < 4000)
+    {
+        const double t_left = EvaluatePolynomial(pim_FD[0], pim_mom);
+        const double t_right = EvaluatePolynomial(pim_FD[1], pim_mom);
+        piminus = pim_delta_t > t_left && pim_delta_t < t_right;
+    }
+
+    if (4000 <= status_pim && status_pim < 8000)
+    {
+        const double t_left = EvaluatePolynomial(pim_CD[0], pim_mom);
+        const double t_right = EvaluatePolynomial(pim_CD[1], pim_mom);
+        piminus = pim_delta_t > t_left && pim_delta_t < t_right;
+    }
+
+    return proton && piminus;
+}
+
 struct Kinematics
 {
     double W;
@@ -212,17 +288,31 @@ void additional_cuts()
         pi_minus.SetXYZM(px_pim, py_pim, pz_pim, 0.139);
 
         // Additional cuts
-        if(
-            PCalFiducialCut(
-                cal_layer_e,
-                cal_sect_e,
-                cal_x_e,
-                cal_y_e
-            )
-        )
-        {
-            continue;
-        }
+        // if(
+        //     PCalFiducialCut(
+        //         cal_layer_e,
+        //         cal_sect_e,
+        //         cal_x_e,
+        //         cal_y_e
+        //     )
+        // )
+        // {
+        //     continue;
+        // }
+
+        // if(
+        //     !DeltaTCut(
+        //         p_final,
+        //         pi_minus,
+        //         time_e, path_e,
+        //         time_p, path_p,
+        //         time_pim, path_pim,
+        //         status_p, status_pim
+        //     )
+        // )
+        // {
+        //     continue;
+        // }
 
         if (!MECut(
                 el_initial,

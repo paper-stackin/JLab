@@ -71,8 +71,8 @@ void MomentumBinsGraphs(
     g_right->SetMarkerColor(kRed);
 
     // --- создаём полиномы ---
-    TF1* f_left  = new TF1("f_left",  "pol5", 0, hist_fit_X_max);
-    TF1* f_right = new TF1("f_right", "pol5", 0, hist_fit_X_max);
+    TF1* f_left  = new TF1("f_left",  "pol3", 0, hist_fit_X_max);
+    TF1* f_right = new TF1("f_right", "pol3", 0, hist_fit_X_max);
 
     // --- фит ---
     g_left->Fit(f_left, "R");
@@ -127,7 +127,7 @@ void delta_t_cut(void)
     CreateDeltaTHists(pim_delta_t_FD,"FD #pi^{-}");
     CreateDeltaTHists(pim_delta_t_CD,"CD #pi^{-}");
 
-	TFile *infile_exp = TFile::Open("/home/stepan/root_progs/2pion_new/clas12/data/MPPT_events_clas12_selection_with_additional_values_saved.root"); // открываем рут файл с импульсами частиц
+	TFile *infile_exp = TFile::Open("/home/stepan/downloads/missing_pip_clas12.root"); // открываем рут файл с импульсами частиц
 
 	TTreeReader reader("MMpiptree", infile_exp);
     TTreeReaderValue<Float_t> px_e(reader, "px_e");
@@ -135,7 +135,6 @@ void delta_t_cut(void)
     TTreeReaderValue<Float_t> pz_e(reader, "pz_e");
     TTreeReaderValue<Float_t> time_e(reader, "time_e");
     TTreeReaderValue<Float_t> path_e(reader, "path_e");
-    TTreeReaderValue<Int_t> status_e(reader, "status_e");
 
     TTreeReaderValue<Float_t> px_p(reader, "px_p");
     TTreeReaderValue<Float_t> py_p(reader, "py_p");

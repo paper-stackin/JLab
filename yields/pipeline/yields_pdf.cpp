@@ -4,11 +4,13 @@ Double_t background(Double_t *x, Double_t *par)
 {
 
 	Double_t bg_ampl = par[0];
-    Double_t mean = par[1];
+    //Double_t mean = par[1];
     Double_t sigma = par[2];
+    Double_t B = par[1]; // B = mu - sigma^2
 
     Double_t logX = log(x[0] + 0.2); // Добавляем 0.1 для избежания отрицательных значений
-    Double_t logNorm = bg_ampl / ( (x[0] + 0.2) * sigma * sqrt(2 * M_PI)) * exp(-0.5 * pow((logX - mean) / sigma, 2));
+    //Double_t logNorm = bg_ampl / ( (x[0] + 0.2) * sigma * sqrt(2 * M_PI)) * exp(-0.5 * pow((logX - mean) / sigma, 2));
+    Double_t logNorm = bg_ampl / ( (x[0] + 0.2) * sigma * sqrt(2 * M_PI)) * exp(-0.5 * pow((logX - B - sigma * sigma) / sigma, 2));
 
     return logNorm;
 }
@@ -159,6 +161,13 @@ std::vector<std::vector<FitResult>> FitBackground(
                 cfg.signal_sigma,
                 cfg.signal_tail
             );
+
+            // B fix v6
+            if(w <= 24)             fitfunc -> SetParLimits(1, -1.31, -1.29098);    // 0.07 - 0.075
+            if(w <= 24)             fitfunc -> SetParLimits(5, 0, 0.023); 
+            if(w > 24 && w < 36)    fitfunc -> SetParLimits(1, -1.31, -1.29098);    // 0.07 - 0.075
+            if(w >= 36 && w < 44)   fitfunc -> SetParLimits(1, -1.31, -1.23787);    // 0.07 - 0.09
+            if(w >= 44)             fitfunc -> SetParLimits(1, -1.29098, -1.23787); // 0.075 - 0.09
 
             hist_bg[q][w]->Fit(fitfunc, "RQ");
 
