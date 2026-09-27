@@ -1,5 +1,8 @@
 void pip_abs_momentum_dist_pdfs()
 {
+    gROOT->SetBatch(kTRUE);
+    gErrorIgnoreLevel = kWarning;
+
     double n_bins = 100, first_bin_val = 0, last_bin_val = 2;
     double step = (last_bin_val - first_bin_val) / n_bins;
     float ME_cuts_08[6][64] = {0};
@@ -79,26 +82,33 @@ void pip_abs_momentum_dist_pdfs()
 
             momentum_dist[q][w] -> Draw();
 
+            gPad->Update();
+
             float p_08 = first_bin_val + x_08 * step;
             float p_09 = first_bin_val + x_09 * step;
             float ME_08 = std::sqrt(p_08 * p_08 + 0.13957 * 0.13957);
             float ME_09 = std::sqrt(p_09 * p_09 + 0.13957 * 0.13957);
 
-            TLine *l_1 = new TLine(p_08, 0, p_08, momentum_dist[q][w] -> GetMaximum() * 1.0485);
+            TLine *l_1 = new TLine(p_08, 0, p_08, gPad->GetUymax());
 	        l_1 -> SetLineColor(kRed);
             l_1 -> Draw("SAME");
 
-            TLine *l_2 = new TLine(p_09, 0, p_09, momentum_dist[q][w] -> GetMaximum() * 1.0485);
+            TLine *l_2 = new TLine(p_09, 0, p_09, gPad->GetUymax());
 	        l_2 -> SetLineColor(kRed);
             l_2 -> Draw("SAME");
 
-            TPaveText* pave = new TPaveText(0.55, 0.6, 0.75, 0.7, "NDC");
+            TPaveText* pave = new TPaveText(0.65, 0.7, 0.75, 0.4, "NDC");
             pave -> SetFillColor(0);
             pave -> SetTextAlign(12);
             pave -> SetTextSize(0.03);
 
-            pave -> AddText(Form("80% : |p| = %.2f GeV, ME_{cut} = %.3f GeV", p_08, ME_08));
-            pave -> AddText(Form("90% : |p| = %.2f GeV, ME_{cut} = %.3f GeV", p_09, ME_09));
+            pave -> AddText(Form("80%% :"));
+            pave -> AddText(Form("    |p| = %.2f GeV", p_08));
+            pave -> AddText(Form("    ME_{cut} = %.3f GeV", ME_08));
+            pave -> AddText(Form(""));
+            pave -> AddText(Form("90%% :"));
+            pave -> AddText(Form("    |p| = %.2f GeV", p_09));
+            pave -> AddText(Form("    ME_{cut} = %.3f GeV", ME_09));
             pave -> Draw("SAME");
 
             canvas -> Update();
