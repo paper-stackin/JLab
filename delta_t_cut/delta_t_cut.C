@@ -75,10 +75,11 @@ void MomentumBinsGraphs(
     TF1* f_right = new TF1("f_right", "pol3", 0, hist_fit_X_max);
 
     // --- фит ---
-    g_left->Fit(f_left, "R");
-    g_right->Fit(f_right, "R");
+    g_left->Fit(f_left, "R0");
+    g_right->Fit(f_right, "R0+");
 
     // --- рисуем 2D ---
+    h2->SetStats(kFALSE); 
     h2->Draw("colz");
 
     // --- точки ---
@@ -103,7 +104,7 @@ void CreateDeltaTHists(TH1F* hists[], const TString& prefix)
 {
     for (int i = 0; i < 20; ++i)
     {
-        TString title = Form("%s #Deltat, p [%.2f, %.2f] GeV; #Deltat, ns",
+        TString title = Form("#Deltat of %s, p #in [%.2f, %.2f] GeV; #Deltat, ns",
                              prefix.Data(), 0.25*i, 0.25*(i+1));
 
         hists[i] = new TH1F(title, title, 100, -1, 1);
@@ -116,16 +117,16 @@ void delta_t_cut(void)
     gStyle->SetOptFit(0);
 	gROOT->SetBatch(kTRUE); 
 
-	TH2F *p_delta_t_vs_p_FD = new TH2F("p_delta_t_FD", "FD proton p VS #Deltat; p, GeV; #Deltat, ns", 100, 0, 5, 100, -10, 10);
-    TH2F *p_delta_t_vs_p_CD = new TH2F("p_delta_t_CD", "CD proton p VS #Deltat; p, GeV; #Deltat, ns", 100, 0, 5, 100, -10, 10);
-    TH2F *pim_delta_t_vs_p_FD = new TH2F("pim_delta_t_FD", "FD #pi^{-} p VS #Deltat; p, GeV; #Deltat, ns", 100, 0, 5, 100, -8, 8);
-    TH2F *pim_delta_t_vs_p_CD = new TH2F("pim_delta_t_CD", "CD #pi^{-} p VS #Deltat; p, GeV; #Deltat, ns", 100, 0, 5, 100, -5, 5);
+	TH2F *p_delta_t_vs_p_FD = new TH2F("p_delta_t_FD", "proton in FD, p VS #Deltat; p, GeV; #Deltat, ns", 100, 0, 5, 100, -10, 10);
+    TH2F *p_delta_t_vs_p_CD = new TH2F("p_delta_t_CD", "proton in CD, p VS #Deltat; p, GeV; #Deltat, ns", 100, 0, 5, 100, -10, 10);
+    TH2F *pim_delta_t_vs_p_FD = new TH2F("pim_delta_t_FD", "#pi^{-} in FD, p VS #Deltat; p, GeV; #Deltat, ns", 100, 0, 5, 100, -8, 8);
+    TH2F *pim_delta_t_vs_p_CD = new TH2F("pim_delta_t_CD", "#pi^{-} in CD, p VS #Deltat; p, GeV; #Deltat, ns", 100, 0, 5, 100, -5, 5);
 
     TH1F *p_delta_t_FD[20], *p_delta_t_CD[20], *pim_delta_t_FD[20], *pim_delta_t_CD[20];
-    CreateDeltaTHists(p_delta_t_FD,  "FD proton");
-    CreateDeltaTHists(p_delta_t_CD,  "CD proton");
-    CreateDeltaTHists(pim_delta_t_FD,"FD #pi^{-}");
-    CreateDeltaTHists(pim_delta_t_CD,"CD #pi^{-}");
+    CreateDeltaTHists(p_delta_t_FD,  "proton in FD");
+    CreateDeltaTHists(p_delta_t_CD,  "proton in CD");
+    CreateDeltaTHists(pim_delta_t_FD,"#pi^{-} in FD");
+    CreateDeltaTHists(pim_delta_t_CD,"#pi^{-} in CD");
 
 	TFile *infile_exp = TFile::Open("/home/stepan/downloads/missing_pip_clas12.root"); // открываем рут файл с импульсами частиц
 

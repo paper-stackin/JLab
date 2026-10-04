@@ -35,7 +35,7 @@ void FillRadialHistogram(TFile *infile, TH1F *hR[6], bool use_weight)
         double rx = *x;
         double ry = *y;
         double r = sqrt(rx * rx + ry * ry);
-        if (r < 150) continue;
+        // if (r < 150) continue;
 
         int sector = *cal_sect_e;
         if (use_weight) hR[sector - 1]->Fill(r, **weight);

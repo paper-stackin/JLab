@@ -245,7 +245,7 @@ void pcal_pdf(const char* config_file)
         // Radial каты
         if (cfg.radial.enable) {
             DrawCircle(cfg.radial.r_min, cfg.radial.phi_1, cfg.radial.phi_2);
-            DrawCircle(cfg.radial.r_max, cfg.radial.phi_1, cfg.radial.phi_2);
+            // DrawCircle(cfg.radial.r_max, cfg.radial.phi_1, cfg.radial.phi_2);
         }
 
         // Верхняя и нижняя границы
