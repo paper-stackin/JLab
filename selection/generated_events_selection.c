@@ -35,12 +35,14 @@ void generated_events_selection()
 {
     std::ios::sync_with_stdio(false);
 
-    // const std::string input_prefix = "/volatile/clas12/osg/savkin/11847/output-11847-";
-    // const int input_start = 0;
-    // const int input_end = 9999;
-    std::string input_prefix = "savkin/10717-";
-    int input_start = 0;
-    int input_end = 19;
+    const std::string input_prefix = "/volatile/clas12/osg/savkin/11847/output-11847-";
+    const int input_start = 0;
+    const int input_end = 9999;
+
+    // std::string input_prefix = "savkin/10717-";
+    // int input_start = 0;
+    // int input_end = 19;
+
     const std::unordered_set<int> files_to_skip = {6492};
 
     const std::string output = "generated_events.root";
