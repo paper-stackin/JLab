@@ -2,6 +2,10 @@ void pip_abs_momentum_dist_hists()
 {
     gROOT -> SetBatch(kTRUE);
 
+    // false: missing_pip_simulation (weighted); true: generated_events (unweighted)
+    const bool use_generated_events = false;
+    const bool use_weights = !use_generated_events;
+
     double n_bins = 100, first_bin_val = 0, last_bin_val = 2;
     double step = (last_bin_val - first_bin_val) / n_bins;
 
@@ -14,7 +18,9 @@ void pip_abs_momentum_dist_hists()
 			momentum_dist[q][w] = new TH1F (namehist, namehist, n_bins, first_bin_val, last_bin_val);
 		}
 
-    TFile *infile = new TFile("/home/stepan/downloads/missing_pip_simulation.root");
+    TFile *infile = new TFile(use_generated_events
+        ? "/home/stepan/downloads/generated_events.root"
+        : "/home/stepan/downloads/missing_pip_simulation.root");
     TTreeReader reader("MMpiptree", infile);
 
     TTreeReaderValue<Float_t> px_e(reader, "px_e");
@@ -29,7 +35,8 @@ void pip_abs_momentum_dist_hists()
     TTreeReaderValue<Float_t> py_pim(reader, "py_pim");
     TTreeReaderValue<Float_t> pz_pim(reader, "pz_pim");
 
-    TTreeReaderValue<Float_t> weight(reader, "weight");
+    std::unique_ptr<TTreeReaderValue<Float_t>> weight;
+    if (use_weights)  weight = std::make_unique<TTreeReaderValue<Float_t>>(reader, "weight");
 
     TLorentzVector el_final, pi_minus, p_final;
     TLorentzVector el_initial(0, 0, 6.535, 6.535);
@@ -63,7 +70,8 @@ void pip_abs_momentum_dist_hists()
         missing_pip.Boost(-beta);
         TVector3 p_missing_pip = missing_pip.Vect();
 
-        momentum_dist[q][w] -> Fill(p_missing_pip.Mag(), *weight);
+        if (use_weights)  momentum_dist[q][w] -> Fill(p_missing_pip.Mag(), **weight);
+        else              momentum_dist[q][w] -> Fill(p_missing_pip.Mag());
     }
 
     TFile *file = new TFile("pip_abs_momentum_dist_hists.root","RECREATE");
