@@ -203,6 +203,10 @@ bool MECut(
 
 void additional_cuts()
 {
+    const bool apply_pcal_fiducial_cut = true;
+    const bool apply_delta_t_cut = true;
+    const bool apply_me_cut = false;
+
     TFile* file_in = TFile::Open("/home/stepan/downloads/missing_pip_clas12.root", "READ");
     TTree* tree_in = (TTree*)file_in->Get("MMpiptree");
     
@@ -255,22 +259,25 @@ void additional_cuts()
     TLorentzVector p_final;
     TLorentzVector pi_minus;
 
-    float ME_cuts[6][64];
+    float ME_cuts[6][64] = {};
 
-    std::ifstream f("/home/stepan/root_progs/2pion_new/missing_pip_abs_momentum_dist/ME_cuts_08.txt");
-
-    for (int i = 0; i < 6; ++i)
+    if (apply_me_cut)
     {
-        std::string line;
-        std::getline(f, line);
+        std::ifstream f("/home/stepan/root_progs/2pion_new/missing_pip_abs_momentum_dist/ME_cuts_08.txt");
 
-        std::istringstream iss(line);
+        for (int i = 0; i < 6; ++i)
+        {
+            std::string line;
+            std::getline(f, line);
 
-        for (int j = 0; j < 64; ++j)
-            iss >> ME_cuts[i][j];
+            std::istringstream iss(line);
+
+            for (int j = 0; j < 64; ++j)
+                iss >> ME_cuts[i][j];
+        }
+
+        f.close();
     }
-
-    f.close();
 
     Long64_t n_entries = tree_in->GetEntries();
 
@@ -278,7 +285,7 @@ void additional_cuts()
     {
         if (i % 1000 == 0)
         {
-            std::cout << i /1000 << "/" << n_entries / 1000 << std::endl;
+            std::cout << "\r" << i / 1000 << "/" << n_entries / 1000 << std::flush;
         }
         
         tree_in->GetEntry(i);
@@ -287,34 +294,30 @@ void additional_cuts()
         p_final.SetXYZM(px_p, py_p, pz_p, 0.938);
         pi_minus.SetXYZM(px_pim, py_pim, pz_pim, 0.139);
 
-        // Additional cuts
-        // if(
-        //     PCalFiducialCut(
-        //         cal_layer_e,
-        //         cal_sect_e,
-        //         cal_x_e,
-        //         cal_y_e
-        //     )
-        // )
-        // {
-        //     continue;
-        // }
+        if (apply_pcal_fiducial_cut &&
+            PCalFiducialCut(
+                cal_layer_e,
+                cal_sect_e,
+                cal_x_e,
+                cal_y_e))
+        {
+            continue;
+        }
 
-        // if(
-        //     !DeltaTCut(
-        //         p_final,
-        //         pi_minus,
-        //         time_e, path_e,
-        //         time_p, path_p,
-        //         time_pim, path_pim,
-        //         status_p, status_pim
-        //     )
-        // )
-        // {
-        //     continue;
-        // }
+        if (apply_delta_t_cut &&
+            !DeltaTCut(
+                p_final,
+                pi_minus,
+                time_e, path_e,
+                time_p, path_p,
+                time_pim, path_pim,
+                status_p, status_pim))
+        {
+            continue;
+        }
 
-        if (!MECut(
+        if (apply_me_cut &&
+            !MECut(
                 el_initial,
                 el_final,
                 p_initial,
@@ -327,6 +330,8 @@ void additional_cuts()
 
         tree_out->Fill();
     }
+
+    std::cout << std::endl;
     
     // Save
     Long64_t n_output = tree_out->GetEntries();
@@ -339,4 +344,6 @@ void additional_cuts()
 
     std::cout << "Input events:  " << n_entries << std::endl;
     std::cout << "Output events: " << n_output << std::endl;
+
+    gSystem -> Exit(0);
 }
