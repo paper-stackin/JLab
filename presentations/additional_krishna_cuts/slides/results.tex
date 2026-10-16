@@ -1,0 +1,76 @@
+\newcommand{\NewCorrelationCutSlide}[5]{
+    \begin{frame}{Examples of results of $\Delta t$ and PCal fiducial cut application}
+
+        \centering
+
+        $Q^2 \in [#1]~\mathrm{GeV}^2$,
+        \quad
+        $W \in [#2]~\mathrm{GeV}$
+
+        \vspace{0.2cm}
+
+        \begin{columns}[T]
+
+            \column{0.48\textwidth}
+
+            \centering
+
+            \includegraphics[
+                page=#4,
+                width=\textwidth
+            ]{figures/me_wo_krishna_cuts/#3}
+
+            \vspace{0.05cm}
+
+            {\small After ME cut application}
+
+            \column{0.48\textwidth}
+
+            \centering
+
+            \includegraphics[
+                page=#4,
+                width=\textwidth
+            ]{figures/me_with_krishna_cuts/#3}
+
+            \vspace{0.05cm}
+
+            {\small After ME and $\Delta t$, PCal cut application}
+
+        \end{columns}
+
+        \vspace{0.15cm}
+
+        \[
+            R = \frac{N_{\mathrm{bg}}^{\mathrm{e.c.}}}
+                     {N_{\mathrm{events}}^{\mathrm{e.c.}}}
+        \]
+
+        \vspace{-0.1cm}
+
+    \end{frame}
+}
+
+\foreach \qmin/\qmax/\graph in {
+    0.5/0.7/missing_pip_fit_in_Q2_bin_1.pdf,
+    0.7/1/missing_pip_fit_in_Q2_bin_2.pdf,
+    1/1.4/missing_pip_fit_in_Q2_bin_3.pdf,
+    1.4/2/missing_pip_fit_in_Q2_bin_4.pdf,
+    2/3/missing_pip_fit_in_Q2_bin_5.pdf
+} {
+
+    \foreach \wmin/\wmax/\page in {
+        1.725/1.75/14,
+        1.9/1.925/21,
+        2/2.025/25,
+        2.5/2.525/45,
+        2.775/2.8/56
+    } {
+
+        \NewCorrelationCutSlide
+            {\qmin,\qmax}
+            {\wmin,\wmax}
+            {\graph}
+            {\page}
+    }
+}

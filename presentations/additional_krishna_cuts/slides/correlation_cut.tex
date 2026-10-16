@@ -1,0 +1,89 @@
+\newcommand{\MomentumDistributionSlide}[5]{
+    \begin{frame}{Simulated $\pi^+$ momentum distribution}
+
+        \centering
+
+        $Q^2 \in [#1]~\mathrm{GeV}^2$,
+        \quad
+        $W \in [#2]~\mathrm{GeV}$
+
+        \vspace{0.2cm}
+
+        \begin{columns}[T]
+
+            \column{0.48\textwidth}
+
+            \centering
+
+            \includegraphics[
+                page=#5,
+                width=\textwidth
+            ]{#3}
+
+            \vspace{0.05cm}
+
+            {\small Generated events}
+
+            \column{0.48\textwidth}
+
+            \centering
+
+            \includegraphics[
+                page=#5,
+                width=\textwidth
+            ]{#4}
+
+            \vspace{0.05cm}
+
+            {\small Accepted events}
+
+        \end{columns}
+
+        \vspace{-0.05cm}
+
+        {\small Twopeg simulation data}
+
+    \end{frame}
+}
+
+\begin{frame}{Missing energy cut procedure}
+
+    \begin{enumerate}
+        \item Generate double pion electroproduction events using
+        the twopeg generator.
+    
+        \item Apply the same standard RGK cuts as for the CLAS12 data.
+    
+        \item Build distributions of the missing $\pi^+$ absolute
+        3-momentum in the COM frame for each bin of $Q^2$ and $W$.
+    
+        \item For each bin, determine the cut which retains
+        $80\%$ of the pions.
+
+        \item Calculate missing energy assuming that $\pi^+$ is on-shell: $E = \sqrt{p^2+m^2}$
+    
+        \item Apply these cuts to the CLAS12 data.
+    \end{enumerate}
+
+\end{frame}
+
+\MomentumDistributionSlide
+    {1,1.4}
+    {2,2.025}
+    {figures/pip_abs_momentum_dist_q2_bin_3_generated.pdf}
+    {/home/stepan/root_progs/2pion_new/missing_pip_abs_momentum_dist/accepted_events/pip_abs_momentum_dist_q2_bin_3.pdf}
+    {25}
+
+\MomentumDistributionSlide
+    {1,1.4}
+    {2.5,2.525}
+    {figures/pip_abs_momentum_dist_q2_bin_3_generated.pdf}
+    {/home/stepan/root_progs/2pion_new/missing_pip_abs_momentum_dist/accepted_events/pip_abs_momentum_dist_q2_bin_3.pdf}
+    {45}
+
+\MomentumDistributionSlide
+    {1,1.4}
+    {2.8,2.825}
+    {figures/pip_abs_momentum_dist_q2_bin_3_generated.pdf}
+    {/home/stepan/root_progs/2pion_new/missing_pip_abs_momentum_dist/accepted_events/pip_abs_momentum_dist_q2_bin_3.pdf}
+    {57}
