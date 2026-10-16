@@ -11,42 +11,56 @@
 
         \begin{columns}[T]
 
-            \column{0.48\textwidth}
-
+            \column{0.33\textwidth}
             \centering
 
             \includegraphics[
                 page=#4,
-                width=\textwidth
+                width=1.12\textwidth
+            ]{/home/stepan/root_progs/2pion_new/yields/results/with_krishna_cuts/#3}
+
+            \vspace{0.05cm}
+
+            {\small After $\Delta t$, PCal cut application}
+
+            \column{0.33\textwidth}
+            \centering
+
+            \includegraphics[
+                page=#4,
+                width=1.12\textwidth
             ]{/home/stepan/root_progs/2pion_new/yields/results/me_without_krishna_cuts/#3}
 
             \vspace{0.05cm}
 
             {\small After ME cut application}
 
-            \column{0.48\textwidth}
-
+            \column{0.33\textwidth}
             \centering
 
             \includegraphics[
                 page=#4,
-                width=\textwidth
+                width=1.12\textwidth
             ]{/home/stepan/root_progs/2pion_new/yields/results/me_with_krishna_cuts/#3}
 
             \vspace{0.05cm}
 
-            {\small After ME and $\Delta t$, PCal cut application}
+            {\small After $\Delta t$, PCal and ME cut application}
 
         \end{columns}
+   
 
-        \vspace{0.15cm}
+        \vspace{0.05cm}
 
+        {\footnotesize
         \[
             R = \frac{N_{\mathrm{bg}}^{\mathrm{e.c.}}}
                      {N_{\mathrm{events}}^{\mathrm{e.c.}}}
         \]
+        }
 
-        \vspace{-0.1cm}
+        \vspace{-0.20cm}
+   
 
     \end{frame}
 }
