@@ -162,12 +162,15 @@ std::vector<std::vector<FitResult>> FitBackground(
                 cfg.signal_tail
             );
 
-            // B fix v6
-            if(w <= 24)             fitfunc -> SetParLimits(1, -1.31, -1.29098);    // 0.07 - 0.075
-            if(w <= 24)             fitfunc -> SetParLimits(5, 0, 0.023); 
-            if(w > 24 && w < 36)    fitfunc -> SetParLimits(1, -1.31, -1.29098);    // 0.07 - 0.075
-            if(w >= 36 && w < 44)   fitfunc -> SetParLimits(1, -1.31, -1.23787);    // 0.07 - 0.09
-            if(w >= 44)             fitfunc -> SetParLimits(1, -1.29098, -1.23787); // 0.075 - 0.09
+            // // B fix v6
+            // if(w <= 24)             fitfunc -> SetParLimits(1, -1.31, -1.29098);    // 0.07 - 0.075
+            // if(w <= 24)             fitfunc -> SetParLimits(5, 0, 0.023); 
+            // if(w > 24 && w < 36)    fitfunc -> SetParLimits(1, -1.31, -1.29098);    // 0.07 - 0.075
+            // if(w >= 36 && w < 44)   fitfunc -> SetParLimits(1, -1.31, -1.23787);    // 0.07 - 0.09
+            // if(w >= 44)             fitfunc -> SetParLimits(1, -1.29098, -1.23787); // 0.075 - 0.09
+
+            // fix of wrongly fitted bins
+            if(w == 55 && q >= 3) fitfunc -> SetParLimits(2, 0.7, 0.9); 
 
             hist_bg[q][w]->Fit(fitfunc, "RQ");
 
