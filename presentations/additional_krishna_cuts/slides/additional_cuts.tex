@@ -1,0 +1,447 @@
+\newcommand{\DeltaTDistributionSlide}[4]{
+    \begin{frame}{$\Delta t$ distributions}
+
+        \centering
+
+        $p \in [#1,#2]~\mathrm{GeV}$
+
+        \vspace{0.1cm}
+
+        \begin{columns}[T]
+
+            \column{0.48\textwidth}
+
+            \centering
+
+            \vspace{0.05cm}
+
+            \includegraphics[
+                page=#3,
+                width=#4\textwidth
+            ]{/home/stepan/root_progs/2pion_new/delta_t_cut/CD_proton_delta_t.pdf}
+
+            \vspace{0.05cm}
+
+            \includegraphics[
+                page=#3,
+                width=#4\textwidth
+            ]{/home/stepan/root_progs/2pion_new/delta_t_cut/CD_pim_delta_t.pdf}
+
+            \column{0.48\textwidth}
+
+            \centering
+
+            \vspace{0.05cm}
+
+            \includegraphics[
+                page=#3,
+                width=#4\textwidth
+            ]{/home/stepan/root_progs/2pion_new/delta_t_cut/FD_proton_delta_t.pdf}
+
+            \vspace{0.05cm}
+
+            \includegraphics[
+                page=#3,
+                width=#4\textwidth
+            ]{/home/stepan/root_progs/2pion_new/delta_t_cut/FD_pim_delta_t.pdf}
+
+        \end{columns}
+
+    \end{frame}
+}
+
+\newcommand{\YPrimeDistributionSlide}[3]{
+    \begin{frame}{$y'$ distributions}
+
+        \centering
+
+        $x' \in [#1,#2]~\mathrm{cm}$
+
+        \vspace{0.1cm}
+
+        \begin{columns}[T]
+
+            \column{0.32\textwidth}
+            \centering
+            {\small\textbf{Sector 1}}
+
+            \includegraphics[
+                page=#3,
+                width=\textwidth
+            ]{/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/output_graphs/experiment/PCAL_sector_1.pdf}
+
+            \column{0.32\textwidth}
+            \centering
+            {\small\textbf{Sector 2}}
+
+            \includegraphics[
+                page=#3,
+                width=\textwidth
+            ]{/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/output_graphs/experiment/PCAL_sector_2.pdf}
+
+            \column{0.32\textwidth}
+            \centering
+            {\small\textbf{Sector 3}}
+
+            \includegraphics[
+                page=#3,
+                width=\textwidth
+            ]{/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/output_graphs/experiment/PCAL_sector_3.pdf}
+
+        \end{columns}
+
+        \vspace{0.1cm}
+
+        \begin{columns}[T]
+
+            \column{0.32\textwidth}
+            \centering
+            {\small\textbf{Sector 4}}
+
+            \includegraphics[
+                page=#3,
+                width=\textwidth
+            ]{/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/output_graphs/experiment/PCAL_sector_4.pdf}
+
+            \column{0.32\textwidth}
+            \centering
+            {\small\textbf{Sector 5}}
+
+            \includegraphics[
+                page=#3,
+                width=\textwidth
+            ]{/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/output_graphs/experiment/PCAL_sector_5.pdf}
+
+            \column{0.32\textwidth}
+            \centering
+            {\small\textbf{Sector 6}}
+
+            \includegraphics[
+                page=#3,
+                width=\textwidth
+            ]{/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/output_graphs/experiment/PCAL_sector_6.pdf}
+
+        \end{columns}
+
+    \end{frame}
+}
+
+\begin{frame}{$\Delta t$ cut for hadrons}
+
+    \begin{enumerate}
+        \item The $\Delta t$ distribution for hadron candidates is divided
+        into momentum bins.
+    
+        \item Each distribution is fitted with a Gaussian to determine
+        the mean and $\sigma$ values.
+    
+        \item A polynomial is fitted to the values
+        $\mathrm{mean} \pm 3.5\sigma$ from each momentum bin.
+    
+        \item Particles within the polynomial boundaries are selected
+        for further analysis.
+    
+        \item The procedure is applied separately to hadrons in the FD and CD.
+    \end{enumerate}
+    
+    \vspace{0.2cm}
+    
+    %\textcolor{myblue}{\textbf{Time-of-flight difference}}
+    
+    \[
+        \Delta t =
+        t_{\mathrm{vx}}^e
+        - t_{\mathrm{vx}}^h
+    \]
+    
+    \[
+        t_{\mathrm{vx}}^e =
+        t_{\mathrm{SC}}^e - \frac{l_{\mathrm{SC}}^e}{c},
+        \qquad
+        t_{\mathrm{vx}}^h =
+        t_{\mathrm{SC}}^h - \frac{l_{\mathrm{SC}}^h}{\beta c},
+        \qquad
+        \beta = \frac{pc}{E}
+    \]
+    
+    \vspace{-0.1cm}
+    
+    \begin{center}
+    \small
+    $l_{\mathrm{SC}}^h$ — hadron path length to SC,
+    $t_{\mathrm{SC}}^h$ — hadron time measured in SC
+
+    $l_{\mathrm{SC}}^e$ — electron path length to SC,
+    $t_{\mathrm{SC}}^e$ — electron time measured in SC
+    \end{center}
+    
+\end{frame}
+
+\DeltaTDistributionSlide
+    {0.5}
+    {0.75}
+    {3}
+    {0.72}
+
+\DeltaTDistributionSlide
+    {1}
+    {1.25}
+    {5}
+    {0.72}
+
+\DeltaTDistributionSlide
+    {2}
+    {2.25}
+    {9}
+    {0.72}
+
+\begin{frame}{Momentum vs $\Delta t$ distributions}
+
+    \vspace{0.1cm}
+
+    \begin{columns}[T]
+
+        \column{0.48\textwidth}
+
+        \centering
+
+        \vspace{0.05cm}
+
+        \includegraphics[
+            page=21,
+            width=0.72\textwidth
+        ]{/home/stepan/root_progs/2pion_new/delta_t_cut/CD_proton_delta_t.pdf}
+
+        \vspace{0.05cm}
+
+        \includegraphics[
+            page=21,
+            width=0.72\textwidth
+        ]{/home/stepan/root_progs/2pion_new/delta_t_cut/CD_pim_delta_t.pdf}
+
+        \column{0.48\textwidth}
+
+        \centering
+
+        \vspace{0.05cm}
+
+        \includegraphics[
+            page=21,
+            width=0.72\textwidth
+        ]{/home/stepan/root_progs/2pion_new/delta_t_cut/FD_proton_delta_t.pdf}
+
+        \vspace{0.05cm}
+
+        \includegraphics[
+            page=21,
+            width=0.72\textwidth
+        ]{/home/stepan/root_progs/2pion_new/delta_t_cut/FD_pim_delta_t.pdf}
+
+    \end{columns}
+
+\end{frame}
+
+\begin{frame}{PCal fiducial cut for electron}
+
+    \textcolor{myblue}{\textbf{Procedure}}
+    
+    \begin{enumerate}
+        \item The $y'$ distribution for electrons is divided into $x'$ bins.
+    
+        \item The boundaries are determined so that 10\% of the events
+        lie outside the boundaries.
+    
+        \item A polynomial is fitted to the values of the cuts from
+        each $x'$ bin.
+    
+        \item The inner circular cut is determined from the comparison
+        with simulated data.
+    
+        \item Particles within the polynomial boundaries are selected
+        for further analysis.
+
+        \item The procedure is applied separately to electrons in each sector of the calorimeter.
+    \end{enumerate}
+    
+    \vspace{0.1cm}
+    
+    \textcolor{myblue}{\textbf{Coordinate transformation}}
+    
+    \[
+    \begin{aligned}
+    x' &= x\cos\left(
+        \frac{\pi}{180}(-60\,\mathrm{sec})
+        \right)
+        - y\sin\left(
+        \frac{\pi}{180}(-60\,\mathrm{sec})
+        \right),
+    \\[0.1cm]
+    y' &= x\sin\left(
+        \frac{\pi}{180}(-60\,\mathrm{sec})
+        \right)
+        + y\cos\left(
+        \frac{\pi}{180}(-60\,\mathrm{sec})
+        \right).
+    \end{aligned}
+    \]
+
+\end{frame}
+
+\YPrimeDistributionSlide
+    {160}
+    {170}
+    {6}
+
+\YPrimeDistributionSlide
+    {220}
+    {230}
+    {12}
+
+\YPrimeDistributionSlide
+    {280}
+    {290}
+    {18}
+
+\begin{frame}{Circular cut determination}
+
+        \centering
+
+        $r = \sqrt{x'^2+y'^2}$, inner cut: $150~\mathrm{cm}$
+
+        \vspace{0.1cm}
+
+        \begin{columns}[T]
+
+            \column{0.32\textwidth}
+            \centering
+            {\small\textbf{Sector 1}}
+
+            \includegraphics[
+                page=1,
+                width=\textwidth
+            ]{/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/output_graphs/radial_distributions.pdf}
+
+            \column{0.32\textwidth}
+            \centering
+            {\small\textbf{Sector 2}}
+
+            \includegraphics[
+                page=2,
+                width=\textwidth
+            ]{/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/output_graphs/radial_distributions.pdf}
+
+            \column{0.32\textwidth}
+            \centering
+            {\small\textbf{Sector 3}}
+
+            \includegraphics[
+                page=3,
+                width=\textwidth
+            ]{/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/output_graphs/radial_distributions.pdf}
+
+        \end{columns}
+
+        \vspace{0.1cm}
+
+        \begin{columns}[T]
+
+            \column{0.32\textwidth}
+            \centering
+            {\small\textbf{Sector 4}}
+
+            \includegraphics[
+                page=4,
+                width=\textwidth
+            ]{/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/output_graphs/radial_distributions.pdf}
+
+            \column{0.32\textwidth}
+            \centering
+            {\small\textbf{Sector 5}}
+
+            \includegraphics[
+                page=5,
+                width=\textwidth
+            ]{/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/output_graphs/radial_distributions.pdf}
+
+            \column{0.32\textwidth}
+            \centering
+            {\small\textbf{Sector 6}}
+
+            \includegraphics[
+                page=6,
+                width=\textwidth
+            ]{/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/output_graphs/radial_distributions.pdf}
+
+        \end{columns}
+
+\end{frame}
+
+\begin{frame}{$x'$ vs $y'$ distributions}
+
+        \vspace{0.1cm}
+
+        \begin{columns}[T]
+
+            \column{0.32\textwidth}
+            \centering
+            {\small\textbf{Sector 1}}
+
+            \includegraphics[
+                page=27,
+                width=\textwidth
+            ]{/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/output_graphs/experiment/PCAL_sector_1.pdf}
+
+            \column{0.32\textwidth}
+            \centering
+            {\small\textbf{Sector 2}}
+
+            \includegraphics[
+                page=27,
+                width=\textwidth
+            ]{/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/output_graphs/experiment/PCAL_sector_2.pdf}
+
+            \column{0.32\textwidth}
+            \centering
+            {\small\textbf{Sector 3}}
+
+            \includegraphics[
+                page=27,
+                width=\textwidth
+            ]{/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/output_graphs/experiment/PCAL_sector_3.pdf}
+
+        \end{columns}
+
+        \vspace{0.1cm}
+
+        \begin{columns}[T]
+
+            \column{0.32\textwidth}
+            \centering
+            {\small\textbf{Sector 4}}
+
+            \includegraphics[
+                page=27,
+                width=\textwidth
+            ]{/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/output_graphs/experiment/PCAL_sector_4.pdf}
+
+            \column{0.32\textwidth}
+            \centering
+            {\small\textbf{Sector 5}}
+
+            \includegraphics[
+                page=27,
+                width=\textwidth
+            ]{/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/output_graphs/experiment/PCAL_sector_5.pdf}
+
+            \column{0.32\textwidth}
+            \centering
+            {\small\textbf{Sector 6}}
+
+            \includegraphics[
+                page=27,
+                width=\textwidth
+            ]{/home/stepan/root_progs/2pion_new/pcal_fiducial_cut/output_graphs/experiment/PCAL_sector_6.pdf}
+
+        \end{columns}
+
+\end{frame}

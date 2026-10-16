@@ -1,0 +1,80 @@
+\newcommand{\OldCorrelationCutSlide}[5]{
+    \begin{frame}{Examples of results of correlation cut application}
+
+        \centering
+
+        $Q^2 \in [#1]~\mathrm{GeV}^2$,
+        \quad
+        $W \in [#2]~\mathrm{GeV}$
+
+        \vspace{0.2cm}
+
+        \begin{columns}[T]
+
+            \column{0.48\textwidth}
+
+            \centering
+
+            \includegraphics[
+                page=#5,
+                width=\textwidth
+            ]{#3}
+
+            \vspace{0.05cm}
+
+            {\small Before ME cut application}
+
+            \column{0.48\textwidth}
+
+            \centering
+
+            \includegraphics[
+                page=#5,
+                width=\textwidth
+            ]{#4}
+
+            \vspace{0.05cm}
+
+            {\small After ME cut application}
+
+        \end{columns}
+
+        \vspace{0.15cm}
+
+        \[
+            R = \frac{N_{\mathrm{bg}}^{\mathrm{e.c.}}}
+                     {N_{\mathrm{events}}^{\mathrm{e.c.}}}
+        \]
+
+        \vspace{-0.1cm}
+
+    \end{frame}
+}
+
+\OldCorrelationCutSlide
+    {0.7,1}
+    {2,2.025}
+    {/home/stepan/root_progs/2pion_new/yields/results/no_me_cut/missing_pip_fit_in_Q2_bin_2.pdf}
+    {/home/stepan/root_progs/2pion_new/yields/results/me_without_krishna_cuts/missing_pip_fit_in_Q2_bin_2.pdf}
+    {25}
+
+\OldCorrelationCutSlide
+    {0.7,1}
+    {2.5,2.525}
+    {/home/stepan/root_progs/2pion_new/yields/results/no_me_cut/missing_pip_fit_in_Q2_bin_2.pdf}
+    {/home/stepan/root_progs/2pion_new/yields/results/me_without_krishna_cuts/missing_pip_fit_in_Q2_bin_2.pdf}
+    {45}
+
+\OldCorrelationCutSlide
+    {1.4,2}
+    {2,2.025}
+    {/home/stepan/root_progs/2pion_new/yields/results/no_me_cut/missing_pip_fit_in_Q2_bin_4.pdf}
+    {/home/stepan/root_progs/2pion_new/yields/results/me_without_krishna_cuts/missing_pip_fit_in_Q2_bin_4.pdf}
+    {25}
+
+\OldCorrelationCutSlide
+    {1.4,2}
+    {2.5,2.525}
+    {/home/stepan/root_progs/2pion_new/yields/results/no_me_cut/missing_pip_fit_in_Q2_bin_4.pdf}
+    {/home/stepan/root_progs/2pion_new/yields/results/me_without_krishna_cuts/missing_pip_fit_in_Q2_bin_4.pdf}
+    {45}
