@@ -2,3 +2,11 @@
 *.pdf
 *.hipo
 *.txt
+*.log
+*.fls
+*.fdb_latexmk
+*.aux
+*.nav
+*.out
+*.snm
+*.toc
