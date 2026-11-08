@@ -124,6 +124,7 @@ struct Kinematics
     double Q2;
     double ME;
     double MM_sq;
+    double dE;
 
     int q;
     int w;
@@ -149,8 +150,12 @@ Kinematics CalculateKinematics(
 
     missing_pip.Boost(-beta);
 
+    const double m_pi = 0.139;
+    const double E_projected = std::sqrt(missing_pip.Vect().Mag2() + m_pi * m_pi);
+
     result.ME = missing_pip.E();
     result.MM_sq = missing_pip.M2();
+    result.dE = result.ME - E_projected;
 
     result.q = -1;
 
@@ -201,11 +206,31 @@ bool MECut(
     return true;
 }
 
+bool DeltaECut(
+    const TLorentzVector& el_initial,
+    const TLorentzVector& el_final,
+    const TLorentzVector& p_initial,
+    const TLorentzVector& p_final,
+    const TLorentzVector& pi_minus
+)
+{
+    Kinematics kin = CalculateKinematics(
+        el_initial,
+        el_final,
+        p_initial,
+        p_final,
+        pi_minus
+    );
+
+    return std::abs(kin.dE) < 0.1;
+}
+
 void additional_cuts()
 {
-    const bool apply_pcal_fiducial_cut = true;
-    const bool apply_delta_t_cut = true;
+    const bool apply_pcal_fiducial_cut = false;
+    const bool apply_delta_t_cut = false;
     const bool apply_me_cut = false;
+    const bool apply_delta_e_cut = true;
 
     TFile* file_in = TFile::Open("/home/stepan/downloads/missing_pip_clas12.root", "READ");
     TTree* tree_in = (TTree*)file_in->Get("MMpiptree");
@@ -324,6 +349,17 @@ void additional_cuts()
                 p_final,
                 pi_minus,
                 ME_cuts))
+        {
+            continue;
+        }
+
+        if (apply_delta_e_cut &&
+            !DeltaECut(
+                el_initial,
+                el_final,
+                p_initial,
+                p_final,
+                pi_minus))
         {
             continue;
         }
