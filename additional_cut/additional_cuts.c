@@ -1,0 +1,349 @@
+double EvaluatePolynomial(const double* p, double x)
+{
+    return p[0] + x * (p[1] + x * (p[2] + x * p[3]));
+}
+
+bool PCalFiducialCut(
+    int cal_layer_e,
+    int cal_sect_e,
+    double cal_x_e,
+    double cal_y_e
+)
+{
+    const double p_lower[6][4] = {
+                    {175.997,-2.19104,0.00698198,-9.2885e-06},
+                    {219.797,-2.71269,0.00891301,-1.15516e-05},
+                    {226.274,-2.84365,0.00957273,-1.23558e-05},
+                    {181.685,-2.2416,0.00702503,-9.08476e-06},
+                    {223.327,-2.79671,0.00935171,-1.20265e-05},
+                    {152.767,-1.77109,0.004802,-5.80913e-06}
+                };
+
+    const double p_upper[6][4] = {
+                    {-176.431,2.16702,-0.00665704,8.51867e-06},
+                    {-214.182,2.60839,-0.00830054,1.04541e-05},
+                    {-227.966,2.84059,-0.00948886,1.21912e-05},
+                    {-178.192,2.23739,-0.00721147,9.56152e-06},
+                    {-207.242,2.58685,-0.00845863,1.083e-05},
+                    {-168.544,2.08019,-0.00634868,8.22812e-06}
+                };
+
+    if (cal_layer_e != 1) return true;
+
+    double angle = TMath::Pi() / 180.0 * (-60.0 * (cal_sect_e - 1));
+    double x = cal_x_e * TMath::Cos(angle) - cal_y_e * TMath::Sin(angle);
+    double y = cal_x_e * TMath::Sin(angle) + cal_y_e * TMath::Cos(angle);
+
+    const double y_lower = EvaluatePolynomial(p_lower[cal_sect_e - 1], x);
+    const double y_upper = EvaluatePolynomial(p_upper[cal_sect_e - 1], x);
+
+    const double r = sqrt(x * x + y * y);
+
+    return y > y_upper || y < y_lower || r < 150;
+}
+
+bool DeltaTCut(
+    const TLorentzVector& p_final,
+    const TLorentzVector& pi_minus,
+    float time_e, float path_e,
+    float time_p, float path_p,
+    float time_pim, float path_pim,
+    int status_p, int status_pim
+)
+{
+    const double p_FD[2][4] = {
+        {-1.81993, 1.56695, -0.537688, 0.0567944},
+        {2.05426, -1.99292, 0.697655, -0.0749161}
+    };
+
+    const double p_CD[2][4] = {
+        {-1.07061, 0.725577, -0.322277, 0.0543469},
+        {0.991423, -0.663469, 0.189848, -0.0114122}
+    };
+
+    const double pim_FD[2][4] = {
+        {-0.47698, -0.115347, 0.0350752, -0.00383088},
+        {0.471637, 0.102206, -0.0284684, 0.00287855}
+    };
+
+    const double pim_CD[2][4] = {
+        {-0.373887, -0.365277, 0.256151, -0.0558962},
+        {0.321532, 0.47643, -0.350448, 0.0829287}
+    };
+                
+    double p_mom = p_final.P();
+    double pim_mom = pi_minus.P();
+
+    double p_beta = p_final.Beta();
+    double pim_beta = pi_minus.Beta();
+
+    if(p_beta <= 0 || pim_beta <= 0) return false;
+
+    double c_light = 29.9792458;
+
+    double t_e = time_e - path_e / c_light;
+    double p_delta_t = path_p / p_beta / c_light - time_p + t_e;
+    double pim_delta_t = path_pim / pim_beta / c_light - time_pim + t_e;
+    
+    bool proton = false, piminus = false;
+
+    if (2000 <= status_p && status_p < 4000)
+    {
+        const double t_left = EvaluatePolynomial(p_FD[0], p_mom);
+        const double t_right = EvaluatePolynomial(p_FD[1], p_mom);
+        proton = p_delta_t > t_left && p_delta_t < t_right;
+    } 
+
+    if (4000 <= status_p && status_p < 8000) 
+    {
+        const double t_left = EvaluatePolynomial(p_CD[0], p_mom);
+        const double t_right = EvaluatePolynomial(p_CD[1], p_mom);
+        proton = p_delta_t > t_left && p_delta_t < t_right;
+    }
+
+    if (2000 <= status_pim && status_pim < 4000)
+    {
+        const double t_left = EvaluatePolynomial(pim_FD[0], pim_mom);
+        const double t_right = EvaluatePolynomial(pim_FD[1], pim_mom);
+        piminus = pim_delta_t > t_left && pim_delta_t < t_right;
+    }
+
+    if (4000 <= status_pim && status_pim < 8000)
+    {
+        const double t_left = EvaluatePolynomial(pim_CD[0], pim_mom);
+        const double t_right = EvaluatePolynomial(pim_CD[1], pim_mom);
+        piminus = pim_delta_t > t_left && pim_delta_t < t_right;
+    }
+
+    return proton && piminus;
+}
+
+struct Kinematics
+{
+    double W;
+    double Q2;
+    double ME;
+    double MM_sq;
+
+    int q;
+    int w;
+};
+
+Kinematics CalculateKinematics(
+    const TLorentzVector& el_initial,
+    const TLorentzVector& el_final,
+    const TLorentzVector& p_initial,
+    const TLorentzVector& p_final,
+    const TLorentzVector& pi_minus)
+{
+    Kinematics result;
+
+    TLorentzVector virtual_photon = el_initial - el_final;
+    TLorentzVector missing_pip =
+        virtual_photon + p_initial - p_final - pi_minus;
+
+    result.W = (virtual_photon + p_initial).M();
+    result.Q2 = -virtual_photon.M2();
+
+    TVector3 beta = (virtual_photon + p_initial).BoostVector();
+
+    missing_pip.Boost(-beta);
+
+    result.ME = missing_pip.E();
+    result.MM_sq = missing_pip.M2();
+
+    result.q = -1;
+
+    if (result.Q2 >= 0.5 && result.Q2 <= 0.7)
+        result.q = 0;
+    else if (result.Q2 > 0.7 && result.Q2 <= 1.0)
+        result.q = 1;
+    else if (result.Q2 > 1.0 && result.Q2 <= 1.4)
+        result.q = 2;
+    else if (result.Q2 > 1.4 && result.Q2 <= 2.0)
+        result.q = 3;
+    else if (result.Q2 > 2.0 && result.Q2 <= 3.0)
+        result.q = 4;
+    else if (result.Q2 > 3.0)
+        result.q = 5;
+
+    result.w = static_cast<int>((result.W - 1.4) / 0.025);
+
+    return result;
+}
+
+bool MECut(
+    const TLorentzVector& el_initial,
+    const TLorentzVector& el_final,
+    const TLorentzVector& p_initial,
+    const TLorentzVector& p_final,
+    const TLorentzVector& pi_minus,
+    const float ME_cuts[6][64]
+)
+{
+    Kinematics kin = CalculateKinematics(
+        el_initial,
+        el_final,
+        p_initial,
+        p_final,
+        pi_minus
+    );
+
+    if (kin.q < 0 || kin.q >= 6)
+        return false;
+
+    if (kin.w < 0 || kin.w >= 64)
+        return false;
+
+    if (kin.ME < 0.175 || kin.ME > ME_cuts[kin.q][kin.w])
+        return false;
+
+    return true;
+}
+
+void additional_cuts()
+{
+    const bool apply_pcal_fiducial_cut = true;
+    const bool apply_delta_t_cut = true;
+    const bool apply_me_cut = false;
+
+    TFile* file_in = TFile::Open("/home/stepan/downloads/missing_pip_clas12.root", "READ");
+    TTree* tree_in = (TTree*)file_in->Get("MMpiptree");
+    
+    // Read branches
+    Float_t px_e, py_e, pz_e; 
+    Int_t cal_sect_e, cal_layer_e; 
+    Float_t cal_x_e, cal_y_e; 
+    Float_t time_e, path_e; 
+    
+    Float_t px_p, py_p, pz_p; 
+    Float_t time_p, path_p; 
+    Int_t status_p;
+
+    Float_t px_pim, py_pim, pz_pim; 
+    Float_t time_pim, path_pim; 
+    Int_t status_pim;
+
+    tree_in->SetBranchAddress("px_e", &px_e); 
+    tree_in->SetBranchAddress("py_e", &py_e); 
+    tree_in->SetBranchAddress("pz_e", &pz_e); 
+    tree_in->SetBranchAddress("cal_sect_e", &cal_sect_e); 
+    tree_in->SetBranchAddress("cal_layer_e", &cal_layer_e); 
+    tree_in->SetBranchAddress("cal_x_e", &cal_x_e); 
+    tree_in->SetBranchAddress("cal_y_e", &cal_y_e); 
+    tree_in->SetBranchAddress("time_e", &time_e); 
+    tree_in->SetBranchAddress("path_e", &path_e);
+
+    tree_in->SetBranchAddress("px_p", &px_p); 
+    tree_in->SetBranchAddress("py_p", &py_p); 
+    tree_in->SetBranchAddress("pz_p", &pz_p); 
+    tree_in->SetBranchAddress("time_p", &time_p); 
+    tree_in->SetBranchAddress("path_p", &path_p); 
+    tree_in->SetBranchAddress("status_p", &status_p); 
+
+    tree_in->SetBranchAddress("px_pim", &px_pim); 
+    tree_in->SetBranchAddress("py_pim", &py_pim); 
+    tree_in->SetBranchAddress("pz_pim", &pz_pim); 
+    tree_in->SetBranchAddress("time_pim", &time_pim); 
+    tree_in->SetBranchAddress("path_pim", &path_pim); 
+    tree_in->SetBranchAddress("status_pim", &status_pim);
+    
+    // Output
+    TFile* file_out = TFile::Open("missing_pip_clas12_with_additional_cuts.root", "RECREATE");
+    TTree* tree_out = tree_in->CloneTree(0);
+
+    // Event loop
+    TLorentzVector el_initial(0, 0, 6.535, 6.535);
+    TLorentzVector p_initial(0, 0, 0, 0.938);
+    TLorentzVector el_final;
+    TLorentzVector p_final;
+    TLorentzVector pi_minus;
+
+    float ME_cuts[6][64] = {};
+
+    if (apply_me_cut)
+    {
+        std::ifstream f("/home/stepan/root_progs/2pion_new/missing_pip_abs_momentum_dist/ME_cuts_08.txt");
+
+        for (int i = 0; i < 6; ++i)
+        {
+            std::string line;
+            std::getline(f, line);
+
+            std::istringstream iss(line);
+
+            for (int j = 0; j < 64; ++j)
+                iss >> ME_cuts[i][j];
+        }
+
+        f.close();
+    }
+
+    Long64_t n_entries = tree_in->GetEntries();
+
+    for (Long64_t i = 0; i < n_entries; i++)
+    {
+        if (i % 1000 == 0)
+        {
+            std::cout << "\r" << i / 1000 << "/" << n_entries / 1000 << std::flush;
+        }
+        
+        tree_in->GetEntry(i);
+
+        el_final.SetXYZM(px_e, py_e, pz_e, 0.);
+        p_final.SetXYZM(px_p, py_p, pz_p, 0.938);
+        pi_minus.SetXYZM(px_pim, py_pim, pz_pim, 0.139);
+
+        if (apply_pcal_fiducial_cut &&
+            PCalFiducialCut(
+                cal_layer_e,
+                cal_sect_e,
+                cal_x_e,
+                cal_y_e))
+        {
+            continue;
+        }
+
+        if (apply_delta_t_cut &&
+            !DeltaTCut(
+                p_final,
+                pi_minus,
+                time_e, path_e,
+                time_p, path_p,
+                time_pim, path_pim,
+                status_p, status_pim))
+        {
+            continue;
+        }
+
+        if (apply_me_cut &&
+            !MECut(
+                el_initial,
+                el_final,
+                p_initial,
+                p_final,
+                pi_minus,
+                ME_cuts))
+        {
+            continue;
+        }
+
+        tree_out->Fill();
+    }
+
+    std::cout << std::endl;
+    
+    // Save
+    Long64_t n_output = tree_out->GetEntries();
+
+    file_out->cd();
+    tree_out->Write();
+
+    file_out->Close();
+    file_in->Close();
+
+    std::cout << "Input events:  " << n_entries << std::endl;
+    std::cout << "Output events: " << n_output << std::endl;
+
+    gSystem -> Exit(0);
+}
