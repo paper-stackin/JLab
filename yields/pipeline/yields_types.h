@@ -52,4 +52,14 @@ struct YieldsOutput {
     std::vector<std::vector<double>> integral_error;
 };
 
+inline int WBinLimit(int q) 
+{
+    if (q == 4)
+        return 56;
+    else if (q == 5)
+        return 37;
+    else
+        return 64;
+}
+
 #endif

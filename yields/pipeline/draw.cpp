@@ -143,12 +143,7 @@ void DrawMissingMassFit(
         double Q2_min_val = cfg.Q2_vals[q];
         double Q2_max_val = cfg.Q2_vals[q + 1];
 
-        int w_brink = 64;
-
-        if (q == 4)
-            w_brink = 56;
-        else if (q == 5)
-            w_brink = 37;
+        int w_brink = WBinLimit(q);
 
         TCanvas* canvas = new TCanvas(
             Form("canvas_q%d", q),

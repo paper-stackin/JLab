@@ -11,12 +11,7 @@ std::vector<std::vector<FitResult>> FitBackground(
 
     for (int q = cfg.q_min; q <= cfg.q_max; ++q)
     {
-        int w_brink = 64;
-
-        if (q == 4)
-            w_brink = 56;
-        else if (q == 5)
-            w_brink = 37;
+        int w_brink = WBinLimit(q);
 
         for (int w = cfg.bg_fit_start; w < w_brink; ++w)
         {

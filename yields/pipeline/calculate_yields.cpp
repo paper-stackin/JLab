@@ -27,12 +27,7 @@ YieldsOutput CalculateYields(
 
         double q2_mid_val = (Q2_max_val + Q2_min_val) / 2.0;
 
-        int w_brink = 64;
-
-        if (q == 4)
-            w_brink = 56;
-        else if (q == 5)
-            w_brink = 37;
+        int w_brink = WBinLimit(q);
 
         for (int w = 0; w < w_brink; ++w)
         {

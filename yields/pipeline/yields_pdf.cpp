@@ -17,7 +17,7 @@ void yields_pdf(void)
     TFile *fully_exclusive_file = TFile::Open("interim/mm_pip_hists_m_0.root");
 
     int q_min = 0; int q_max = 5;
-    int w_min = 0; int w_max = 99;
+    int w_min = 0; int w_max = 63;
 
     auto missing_pip_hist = LoadHistograms(
         missing_pip_file, 
