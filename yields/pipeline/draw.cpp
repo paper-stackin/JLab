@@ -4,7 +4,7 @@ void DrawBackgroundExtrapolation(
     const std::vector<std::vector<double>> w_bg_fit,
     const std::vector<ExtrapolationResult>& extrapolation_results,
     const YieldsConfig& cfg,
-    const TString& pdfFileName)
+    const char* topology_name)
 {
     TCanvas* canvas_fit_bg = new TCanvas(
         "canvas_fit_bg",
@@ -12,6 +12,8 @@ void DrawBackgroundExtrapolation(
         1280,
         720
     );
+
+    TString pdfFileName = TString::Format("results/extrapolating_bg_%s.pdf", topology_name);
 
     canvas_fit_bg->Print(pdfFileName + "[");
 
@@ -132,7 +134,7 @@ void DrawBackgroundExtrapolation(
 void DrawMissingMassFit(
     const std::vector<std::vector<TH1F*>>& hist,
     const std::vector<std::vector<FitResult>>& fit_results,
-    const char* pdfFilePrefix,
+    const char* topology_name,
     const YieldsConfig& cfg
 )
 {
@@ -155,7 +157,7 @@ void DrawMissingMassFit(
             600
         );
         
-        TString pdfFileName = TString::Format("%s_in_Q2_bin_%d.pdf", pdfFilePrefix, q + 1);
+        TString pdfFileName = TString::Format("results/%s_fit_in_Q2_bin_%d.pdf", topology_name, q + 1);
 
         canvas->Print(pdfFileName + "[");
 
@@ -460,7 +462,7 @@ void DrawYields(
     std::cout << "Drawing Yields Distribution" << std::endl;
 
     TCanvas *canvas_yields = new TCanvas("canvas_yields", "Canvas Title", 800, 600);
-    TString pdfFileName_graph = Form("results/Yields_in_all_Q2_bins.pdf");  // Генерируем имя файла на основе q
+    TString pdfFileName_graph = Form("results/Yields_in_all_Q2_bins.pdf");  
     canvas_yields->Print(pdfFileName_graph + "[");
 
     for (int q = 0; q < 6; ++q) 
