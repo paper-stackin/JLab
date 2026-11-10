@@ -1,4 +1,5 @@
 #include "yields_config.h"
+#include "yields_types.h"
 
 Double_t background(Double_t *x, Double_t *par) 
 {
@@ -32,55 +33,6 @@ Double_t combined(Double_t *x, Double_t *par)
 {
     return background(x, par) + peak(x, &par[3]);
 }
-
-struct ExtrapolationResult
-{
-    double A = 0.0;
-    double B = 0.0;
-    int w_reper = 0;
-};
-
-struct ExtrapolationOutput {
-    std::vector<std::vector<double>> integral_background;
-    std::vector<std::vector<double>> integral_background_error;
-    std::vector<std::vector<double>> w_bg_fit;
-    std::vector<ExtrapolationResult> extrapolation_results; // Вместо сырого массива [6] используем вектор
-};
-
-struct FitResult
-{
-    bool fitted = false;
-
-    double bg_amp = 0;
-    double bg_mean = 0;
-    double bg_sigma = 0;
-
-    double bg_amp_error = 0;
-    double bg_mean_error = 0;
-    double bg_sigma_error = 0;
-
-    double signal_amp = 0;
-    double signal_mean = 0;
-    double signal_sigma = 0;
-    double signal_tail = 0;
-
-    double signal_amp_error = 0;
-    double signal_mean_error = 0;
-    double signal_sigma_error = 0;
-    double signal_tail_error = 0;
-
-    double xmin = 0;
-    double xmax = 0;
-};
-
-struct YieldsOutput {
-    std::vector<std::vector<double>> w_vector;
-    std::vector<std::vector<double>> w_vector_error;
-    std::vector<std::vector<double>> integral_signal_excut;
-    std::vector<std::vector<double>> integral_signal_excut_error;
-    std::vector<std::vector<double>> integral_signal;
-    std::vector<std::vector<double>> integral_error;
-};
 
 std::vector<std::vector<TH1F*>> LoadHistograms(
     TFile* infile, 

@@ -1,5 +1,5 @@
 # input: /home/stepan/root_progs/2pion/root_trees/MMPiPlusTree_pass2_CHECK.root
-input: /home/stepan/downloads/missing_pip.root
+input: /home/stepan/downloads/missing_pip_clas12.root
 tree_name: MMpiptree
 output: interim/mm_pip_hists_m_pip.root
 hist_name: MM
