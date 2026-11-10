@@ -29,3 +29,37 @@ M_electron: 0.0
 
 speed: 1000000
 period: M
+
+yields:
+  w_fit_min: 8
+  w_fit_max: 17
+  w_reper_q45: 3
+  w_reper_q45_start: 4
+  bg_fit_start: 13
+
+  W_bin_limits: [64, 64, 64, 64, 56, 37]
+
+  xmin: -0.2
+  xmax_low: 0.15
+  xmax_mid: 0.25
+  xmax_high: 0.4
+  xmax_mid_start: 10
+  xmax_high_start: 17
+
+  bg_mean: -1.0
+  bg_sigma: 0.3
+  bg_ampl_bin: 25
+  bg_ampl_factor: 0.3
+
+  signal_mean: 0.0196
+  signal_sigma: 0.03
+  signal_tail: 0.02
+
+  bg_integral_xmin: -0.05
+  bg_integral_xmax: 0.1
+  bin_width_factor: 100.0
+
+  signal_integral_bin_min: 25
+  signal_integral_bin_max: 40
+
+  alpha: 0.0072992700729927007

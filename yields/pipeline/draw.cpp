@@ -17,8 +17,8 @@ void DrawBackgroundExtrapolation(
     for (int q = cfg.q_min; q <= cfg.q_max; ++q)
     {
         // Q2 range
-        double Q2_min_val = cfg.Q2_vals[q];
-        double Q2_max_val = cfg.Q2_vals[q + 1];
+        double Q2_min_val = cfg.Q2_edges[q];
+        double Q2_max_val = cfg.Q2_edges[q + 1];
 
         TString namegraph = Form(
             "Background for Q^{2} #in [%g, %g] GeV^{2}; W bin; Number of bg events",
@@ -137,10 +137,10 @@ void DrawMissingMassFit(
 {
     for (int q = cfg.q_min; q <= cfg.q_max; ++q)
     {
-        double Q2_min_val = cfg.Q2_vals[q];
-        double Q2_max_val = cfg.Q2_vals[q + 1];
+        double Q2_min_val = cfg.Q2_edges[q];
+        double Q2_max_val = cfg.Q2_edges[q + 1];
 
-        int w_brink = WBinLimit(q);
+        int w_brink = cfg.WBinLimit(q);
 
         TCanvas* canvas = new TCanvas(
             Form("canvas_q%d", q),
@@ -155,8 +155,8 @@ void DrawMissingMassFit(
 
         for (int w = 0; w < w_brink; ++w)
         {
-            double w_min_val = 1.4 + w * 0.025;
-            double w_max_val = 1.4 + (w + 1) * 0.025;
+            double w_min_val = cfg.W_min + w * cfg.W_bin_size;
+            double w_max_val = cfg.W_min + (w + 1) * cfg.W_bin_size;
 
             double h_raw = hist[q][w]->GetMaximum();
             double y_axis_maximum = h_raw * 1.05;
@@ -252,10 +252,13 @@ void DrawMissingMassFit(
                 bg->Draw("SAME");
 
                 // Vertical line at maximum
+                double hist_bin_width =
+                    (cfg.hist_max - cfg.hist_min) / cfg.n_hist_bins;
+
                 TLine* maximum_bin_line = new TLine(
-                    hist[q][w]->GetMaximumBin() * 0.01 - 0.3,
+                    cfg.hist_min + hist[q][w]->GetMaximumBin() * hist_bin_width,
                     0,
-                    hist[q][w]->GetMaximumBin() * 0.01 - 0.3,
+                    cfg.hist_min + hist[q][w]->GetMaximumBin() * hist_bin_width,
                     y_axis_maximum
                 );
 
@@ -272,7 +275,10 @@ void DrawMissingMassFit(
                 pave->SetTextAlign(12);
                 pave->SetTextSize(0.03);
 
-                float events_within_ec = hist[q][w]->Integral(25, 40);
+                float events_within_ec = hist[q][w]->Integral(
+                    cfg.signal_integral_bin_min,
+                    cfg.signal_integral_bin_max
+                );
                 float bg_events_within_ec = bg->Integral(
                     cfg.bg_integral_xmin,
                     cfg.bg_integral_xmax
@@ -448,7 +454,8 @@ void DrawMissingMassFit(
 
 void DrawYields(
     YieldsOutput missing_pip,
-    YieldsOutput fully_exclusive
+    YieldsOutput fully_exclusive,
+    const YieldsConfig& cfg
 )
 {
     std::cout << "Drawing Yields Distribution" << std::endl;
@@ -457,16 +464,10 @@ void DrawYields(
     TString pdfFileName_graph = Form("results/Yields_in_all_Q2_bins.pdf");  
     canvas_yields->Print(pdfFileName_graph + "[");
 
-    for (int q = 0; q < 6; ++q) 
+    for (int q = cfg.q_min; q <= cfg.q_max; ++q)
     {
-	    double Q2_min_val, Q2_max_val;
-
-	    if(q == 0)  {Q2_min_val = 0.5, Q2_max_val = 0.7;}
-	    if(q == 1)  {Q2_min_val = 0.7, Q2_max_val = 1;}
-	    if(q == 2)  {Q2_min_val = 1, Q2_max_val = 1.4;}
-	    if(q == 3)  {Q2_min_val = 1.4, Q2_max_val = 2;}
-	    if(q == 4)  {Q2_min_val = 2, Q2_max_val = 3;}
-	    if(q == 5)  {Q2_min_val = 3, Q2_max_val = 5.5;}
+	    double Q2_min_val = cfg.Q2_edges[q];
+	    double Q2_max_val = cfg.Q2_edges[q + 1];
 
 	    char namegraph[256];
         sprintf(namegraph, "Yield for Q^{2} #in [%g, %g] GeV^{2}; W, GeV; Yield", Q2_min_val, Q2_max_val);

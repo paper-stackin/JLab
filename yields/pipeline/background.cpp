@@ -6,12 +6,12 @@ std::vector<std::vector<FitResult>> FitBackground(
 
     std::vector<std::vector<FitResult>> fit_results(
         n_q,
-        std::vector<FitResult>(100)
+        std::vector<FitResult>(cfg.n_W_bins)
     );
 
     for (int q = cfg.q_min; q <= cfg.q_max; ++q)
     {
-        int w_brink = WBinLimit(q);
+        int w_brink = cfg.WBinLimit(q);
 
         for (int w = cfg.bg_fit_start; w < w_brink; ++w)
         {
@@ -98,7 +98,7 @@ ExtrapolationOutput ExtrapolateBackground(
     {
         int w_reper = cfg.w_fit_min;
 
-        if (q == 4 || q == 5)
+        if (q >= cfg.w_reper_q45_start)
             w_reper = cfg.w_reper_q45;
 
         for (int w = w_reper; w <= cfg.w_fit_max; ++w)

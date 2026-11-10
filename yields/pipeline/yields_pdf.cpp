@@ -8,50 +8,45 @@
 #include "draw.cpp"
 #include "process_topology.cpp"
 
-void yields_pdf(void) 
+void yields_pdf(
+    const char* missing_pip_config_file = "missing_pip_config.yaml",
+    const char* fully_exclusive_config_file = "fully_esclusive_config.yaml")
 {
     gErrorIgnoreLevel = kWarning;
 	gROOT->SetBatch(kTRUE); 
 
-    TFile *missing_pip_file = TFile::Open("interim/mm_pip_hists_m_pip.root");
-    TFile *fully_exclusive_file = TFile::Open("interim/mm_pip_hists_m_0.root");
+    YieldsConfig missing_pip_cfg = LoadYieldsConfig(missing_pip_config_file);
+    YieldsConfig fully_exclusive_cfg = LoadYieldsConfig(fully_exclusive_config_file);
 
-    int q_min = 0; int q_max = 5;
-    int w_min = 0; int w_max = 63;
+    TFile *missing_pip_file = TFile::Open(missing_pip_cfg.output.c_str());
+    TFile *fully_exclusive_file = TFile::Open(fully_exclusive_cfg.output.c_str());
 
     auto missing_pip_hist = LoadHistograms(
-        missing_pip_file, 
-        "MM", 
-        q_min, q_max, w_min, w_max
+        missing_pip_file,
+        missing_pip_cfg.hist_name.c_str(),
+        missing_pip_cfg.q_min, missing_pip_cfg.q_max,
+        0, missing_pip_cfg.n_W_bins - 1
     );
 
     auto fully_exclusive_hist = LoadHistograms(
-        fully_exclusive_file, 
-        "MMpiplus_from_MM0_topology", 
-        q_min, q_max, w_min, w_max
+        fully_exclusive_file,
+        fully_exclusive_cfg.hist_name.c_str(),
+        fully_exclusive_cfg.q_min, fully_exclusive_cfg.q_max,
+        0, fully_exclusive_cfg.n_W_bins - 1
     );
 
     // Топология 1: Missing Pi+ (Сигнал и фон — одна гистограмма)
-    YieldsConfig missing_pip_cfg;
-
     auto missing_pip = ProcessTopology(
         missing_pip_hist, {}, missing_pip_cfg, "missing_pip"
     );
 
     // Топология 2: Fully exclusive (Сигнал из первой, форма фона из второй)
-    YieldsConfig fully_exclusive_cfg;
-    fully_exclusive_cfg.signal_sigma = 0.05;
-    fully_exclusive_cfg.xmin = -0.1;
-    fully_exclusive_cfg.xmax_high = 0.3;
-    fully_exclusive_cfg.bg_ampl_bin = 50;
-    fully_exclusive_cfg.bg_ampl_factor = 1.0;
-
     auto fully_exclusive = ProcessTopology(
         missing_pip_hist, fully_exclusive_hist, fully_exclusive_cfg, "fully_exclusive"
     );
     
     // Графики выходов
-    DrawYields(missing_pip, fully_exclusive);
+    DrawYields(missing_pip, fully_exclusive, missing_pip_cfg);
 
     gSystem->Exit(0);
 }

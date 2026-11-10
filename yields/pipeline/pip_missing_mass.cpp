@@ -1,4 +1,4 @@
-#include "pip_missing_mass_config.h"
+#include "yields_config.h"
 
 void pip_missing_mass(const char* config_file)
 {
@@ -6,7 +6,7 @@ void pip_missing_mass(const char* config_file)
     auto start_time = std::chrono::steady_clock::now();
 
     // Configuration
-    PipMissingMassConfig cfg = LoadPipMissingMassConfig(config_file);
+    YieldsConfig cfg = LoadYieldsConfig(config_file);
 
     gROOT->SetBatch(kTRUE);
 

@@ -13,45 +13,40 @@ YieldsOutput CalculateYields(
     res.integral_signal.resize(cfg.q_max + 1);
     res.integral_error.resize(cfg.q_max + 1);
 
-    const double M_prot = 0.938;
-    const double E_beam = 6.535;
-    const double alpha = 1.0 / 137.0;
-    const double del_w = 0.025;
-
     for (int q = cfg.q_min; q <= cfg.q_max; ++q)
     {
-        double Q2_min_val = cfg.Q2_vals[q];
-        double Q2_max_val = cfg.Q2_vals[q + 1];
+        double Q2_min_val = cfg.Q2_edges[q];
+        double Q2_max_val = cfg.Q2_edges[q + 1];
 
         double del_q2 = Q2_max_val - Q2_min_val;
 
         double q2_mid_val = (Q2_max_val + Q2_min_val) / 2.0;
 
-        int w_brink = WBinLimit(q);
+        int w_brink = cfg.WBinLimit(q);
 
         for (int w = 0; w < w_brink; ++w)
         {
             //W
-            double w_min_val = 1.4 + w * del_w;
-            double w_max_val = 1.4 + (w + 1) * del_w;
+            double w_min_val = cfg.W_min + w * cfg.W_bin_size;
+            double w_max_val = cfg.W_min + (w + 1) * cfg.W_bin_size;
             double w_mid_val = (w_min_val + w_max_val) / 2.0;
 
             res.w_vector[q].push_back(w_mid_val);
-            res.w_vector_error[q].push_back(del_w);
+            res.w_vector_error[q].push_back(cfg.W_bin_size);
 
             //Flux
             double E_prime =
-                E_beam -
+                cfg.E_beam -
                 (w_mid_val * w_mid_val
-                 - M_prot * M_prot
+                 - cfg.M_proton * cfg.M_proton
                  + q2_mid_val)
-                / (2.0 * M_prot);
+                / (2.0 * cfg.M_proton);
 
-            double nu = E_beam - E_prime;
+            double nu = cfg.E_beam - E_prime;
 
             double sin2 =
                 q2_mid_val /
-                (4.0 * E_beam * E_prime);
+                (4.0 * cfg.E_beam * E_prime);
 
             double cos2 = 1.0 - sin2;
             double tg2 = sin2 / cos2;
@@ -64,12 +59,12 @@ YieldsOutput CalculateYields(
                 );
 
             double flux =
-                alpha / (4.0 * 3.1415)
+                cfg.alpha / (4.0 * 3.1415)
                 * 1.0 /
-                  (M_prot * M_prot * E_beam * E_beam)
+                  (cfg.M_proton * cfg.M_proton * cfg.E_beam * cfg.E_beam)
                 * (
                     w_mid_val *
-                    (w_mid_val * w_mid_val - M_prot * M_prot)
+                    (w_mid_val * w_mid_val - cfg.M_proton * cfg.M_proton)
                   )
                 / (
                     (1.0 - eps) * q2_mid_val
@@ -78,25 +73,25 @@ YieldsOutput CalculateYields(
             double delta_flux =
                 sqrt(
                     pow(
-                        alpha / (4.0 * 3.1415)
+                        cfg.alpha / (4.0 * 3.1415)
                         * 1.0 /
-                          (M_prot * M_prot * E_beam * E_beam)
+                          (cfg.M_proton * cfg.M_proton * cfg.E_beam * cfg.E_beam)
                         * (
                             (3.0 * w_mid_val * w_mid_val
-                             - M_prot * M_prot)
+                             - cfg.M_proton * cfg.M_proton)
                             / (2.0 * q2_mid_val)
                             - 1.0
                           ),
                         2
-                    ) * pow(del_w, 2)
+                    ) * pow(cfg.W_bin_size, 2)
                     +
                     pow(
-                        alpha / (4.0 * 3.1415)
+                        cfg.alpha / (4.0 * 3.1415)
                         * 1.0 /
-                          (M_prot * M_prot * E_beam * E_beam)
+                          (cfg.M_proton * cfg.M_proton * cfg.E_beam * cfg.E_beam)
                         * (
                             (w_mid_val * w_mid_val
-                             - M_prot * M_prot)
+                             - cfg.M_proton * cfg.M_proton)
                             / (2.0 * q2_mid_val)
                           ),
                         2
@@ -104,11 +99,14 @@ YieldsOutput CalculateYields(
                 );
 
             // N_ex_cut from signal histogram
-            double N_ex_cut = hist_signal[q][w]->Integral(25, 40);
+            double N_ex_cut = hist_signal[q][w]->Integral(
+                cfg.signal_integral_bin_min,
+                cfg.signal_integral_bin_max
+            );
 
             // Yield without background subtraction
 
-            double yield_ex_cut = N_ex_cut / del_q2 / del_w / flux;
+            double yield_ex_cut = N_ex_cut / del_q2 / cfg.W_bin_size / flux;
             double yield_ex_cut_error = yield_ex_cut * sqrt(
                 pow(sqrt(N_ex_cut) / N_ex_cut, 2) + pow(delta_flux / flux, 2)
             );
@@ -126,7 +124,7 @@ YieldsOutput CalculateYields(
             // Background
             int w_reper = cfg.w_fit_min;
 
-            if (q == 4 || q == 5)
+            if (q >= cfg.w_reper_q45_start)
                 w_reper = cfg.w_reper_q45;
 
             double N_bg = 0.0;
@@ -177,7 +175,7 @@ YieldsOutput CalculateYields(
             double N = N_ex_cut - N_bg;
 
             // Final yield
-            double yield = N / del_q2 / del_w / flux;
+            double yield = N / del_q2 / cfg.W_bin_size / flux;
 
             res.integral_signal[q].push_back(
                 yield
