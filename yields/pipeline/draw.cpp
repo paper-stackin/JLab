@@ -1,8 +1,5 @@
 void DrawBackgroundExtrapolation(
-    const std::vector<std::vector<double>> integral_background,
-    const std::vector<std::vector<double>> integral_background_error,
-    const std::vector<std::vector<double>> w_bg_fit,
-    const std::vector<ExtrapolationResult>& extrapolation_results,
+    const ExtrapolationOutput& extrapolation_output,
     const YieldsConfig& cfg,
     const char* topology_name)
 {
@@ -31,11 +28,11 @@ void DrawBackgroundExtrapolation(
 
         // Graph
         TGraphErrors* graph_fit_bg = new TGraphErrors(
-            integral_background[q].size(),
-            w_bg_fit[q].data(),
-            integral_background[q].data(),
+            extrapolation_output.integral_background[q].size(),
+            extrapolation_output.w_bg_fit[q].data(),
+            extrapolation_output.integral_background[q].data(),
             nullptr,
-            integral_background_error[q].data()
+            extrapolation_output.integral_background_error[q].data()
         );
 
         graph_fit_bg->SetTitle(namegraph);
@@ -44,7 +41,7 @@ void DrawBackgroundExtrapolation(
         graph_fit_bg->GetXaxis()->SetNdivisions(20, kTRUE);
 
         // Extrapolation function
-        int w_reper = extrapolation_results[q].w_reper;
+        int w_reper = extrapolation_output.results[q].w_reper;
 
         TF1* fitFunction = new TF1(
             Form("fitFunction_draw_q%d", q),
@@ -60,12 +57,12 @@ void DrawBackgroundExtrapolation(
 
         fitFunction->SetParameter(
             0,
-            extrapolation_results[q].A
+            extrapolation_output.results[q].A
         );
 
         fitFunction->SetParameter(
             1,
-            extrapolation_results[q].B
+            extrapolation_output.results[q].B
         );
 
         // Draw
@@ -104,14 +101,14 @@ void DrawBackgroundExtrapolation(
         pave->AddText(
             Form(
                 "   A = %.2f",
-                extrapolation_results[q].A
+                extrapolation_output.results[q].A
             )
         );
 
         pave->AddText(
             Form(
                 "   B = %.2f",
-                extrapolation_results[q].B
+                extrapolation_output.results[q].B
             )
         );
 

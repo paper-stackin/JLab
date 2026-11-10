@@ -92,7 +92,7 @@ ExtrapolationOutput ExtrapolateBackground(
     output.integral_background.resize(cfg.q_max + 1);
     output.integral_background_error.resize(cfg.q_max + 1);
     output.w_bg_fit.resize(cfg.q_max + 1);
-    output.extrapolation_results.resize(cfg.q_max + 1);
+    output.results.resize(cfg.q_max + 1);
 
     for (int q = cfg.q_min; q <= cfg.q_max; ++q)
     {
@@ -166,9 +166,9 @@ ExtrapolationOutput ExtrapolateBackground(
         graph_fit_bg->Fit(fitFunction, "RQ");
 
         // Save extrapolation parameters
-        output.extrapolation_results[q].A = fitFunction->GetParameter(0);
-        output.extrapolation_results[q].B = fitFunction->GetParameter(1);
-        output.extrapolation_results[q].w_reper = w_reper;
+        output.results[q].A = fitFunction->GetParameter(0);
+        output.results[q].B = fitFunction->GetParameter(1);
+        output.results[q].w_reper = w_reper;
 
         // Extrapolation
         for (int w = 0; w < cfg.bg_fit_start - w_reper; ++w)

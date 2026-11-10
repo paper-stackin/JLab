@@ -14,7 +14,7 @@ struct ExtrapolationOutput {
     std::vector<std::vector<double>> integral_background;
     std::vector<std::vector<double>> integral_background_error;
     std::vector<std::vector<double>> w_bg_fit;
-    std::vector<ExtrapolationResult> extrapolation_results; 
+    std::vector<ExtrapolationResult> results; 
 };
 
 struct FitResult
