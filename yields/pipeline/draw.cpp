@@ -14,7 +14,7 @@ void DrawBackgroundExtrapolation(
 
     canvas_fit_bg->Print(pdfFileName + "[");
 
-    for (int q = cfg.q_min; q <= cfg.q_max; ++q)
+    for (int q = 0; q < cfg.n_Q2_bins; ++q)
     {
         // Q2 range
         double Q2_min_val = cfg.Q2_edges[q];
@@ -134,7 +134,7 @@ void DrawMissingMassFit(
     const YieldsConfig& cfg
 )
 {
-    for (int q = cfg.q_min; q <= cfg.q_max; ++q)
+    for (int q = 0; q < cfg.n_Q2_bins; ++q)
     {
         double Q2_min_val = cfg.Q2_edges[q];
         double Q2_max_val = cfg.Q2_edges[q + 1];
@@ -463,7 +463,7 @@ void DrawYields(
     TString pdfFileName_graph = Form("results/Yields_in_all_Q2_bins.pdf");  
     canvas_yields->Print(pdfFileName_graph + "[");
 
-    for (int q = cfg.q_min; q <= cfg.q_max; ++q)
+    for (int q = 0; q < cfg.n_Q2_bins; ++q)
     {
 	    double Q2_min_val = cfg.Q2_edges[q];
 	    double Q2_max_val = cfg.Q2_edges[q + 1];

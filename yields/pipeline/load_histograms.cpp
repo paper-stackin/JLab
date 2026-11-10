@@ -1,9 +1,9 @@
 std::vector<std::vector<TH1F*>> LoadHistograms(const YieldsConfig& cfg) 
 {
     TFile *infile = TFile::Open(cfg.output.c_str());
-    std::vector<std::vector<TH1F*>> histograms(cfg.q_max + 1);
+    std::vector<std::vector<TH1F*>> histograms(cfg.n_Q2_bins);
 
-    for (int q = cfg.q_min; q <= cfg.q_max; ++q) 
+    for (int q = 0; q < cfg.n_Q2_bins; ++q) 
     {
         histograms[q].resize(cfg.n_W_bins, nullptr);
 

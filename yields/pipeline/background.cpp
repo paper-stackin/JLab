@@ -2,14 +2,12 @@ std::vector<std::vector<FitResult>> FitBackground(
     const std::vector<std::vector<TH1F*>>& hist_bg,
     const YieldsConfig& cfg)
 {
-    int n_q = cfg.q_max - cfg.q_min + 1;
-
     std::vector<std::vector<FitResult>> fit_results(
-        n_q,
+        cfg.n_Q2_bins,
         std::vector<FitResult>(cfg.n_W_bins)
     );
 
-    for (int q = cfg.q_min; q <= cfg.q_max; ++q)
+    for (int q = 0; q < cfg.n_Q2_bins; ++q)
     {
         int w_brink = cfg.WBinLimit(q);
 
@@ -51,8 +49,7 @@ std::vector<std::vector<FitResult>> FitBackground(
 
             hist_bg[q][w]->Fit(fitfunc, "RQ");
 
-            FitResult& result =
-                fit_results[q - cfg.q_min][w];
+            FitResult& result = fit_results[q][w];
 
             result.fitted = true;
 
@@ -89,12 +86,12 @@ ExtrapolationOutput ExtrapolateBackground(
     const YieldsConfig& cfg)
 {
     ExtrapolationOutput output;
-    output.integral_background.resize(cfg.q_max + 1);
-    output.integral_background_error.resize(cfg.q_max + 1);
-    output.w_bg_fit.resize(cfg.q_max + 1);
-    output.results.resize(cfg.q_max + 1);
+    output.integral_background.resize(cfg.n_Q2_bins);
+    output.integral_background_error.resize(cfg.n_Q2_bins);
+    output.w_bg_fit.resize(cfg.n_Q2_bins);
+    output.results.resize(cfg.n_Q2_bins);
 
-    for (int q = cfg.q_min; q <= cfg.q_max; ++q)
+    for (int q = 0; q < cfg.n_Q2_bins; ++q)
     {
         int w_reper = cfg.w_fit_min;
 

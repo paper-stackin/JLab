@@ -21,8 +21,6 @@ struct YieldsConfig
     // Q2 / W binning
     std::vector<double> Q2_edges = {0.5, 0.7, 1.0, 1.4, 2.0, 3.0, 5.5};
     int n_Q2_bins = static_cast<int>(Q2_edges.size()) - 1;
-    int q_min = 0;
-    int q_max = n_Q2_bins - 1;
 
     int n_W_bins = 64;
     double W_min = 1.4;
@@ -109,9 +107,7 @@ inline YieldsConfig LoadYieldsConfig(const std::string& filename)
 
     if (root["Q2_edges"])
         cfg.Q2_edges = root["Q2_edges"].as<std::vector<double>>();
-    cfg.n_Q2_bins = static_cast<int>(cfg.Q2_edges.size()) - 1;
-    cfg.q_min = 0;
-    cfg.q_max = cfg.n_Q2_bins - 1;
+        cfg.n_Q2_bins = static_cast<int>(cfg.Q2_edges.size()) - 1;
 
     if (root["n_W_bins"])
         cfg.n_W_bins = root["n_W_bins"].as<int>();

@@ -6,14 +6,14 @@ YieldsOutput CalculateYields(
     const YieldsConfig& cfg)
 {
     YieldsOutput res;
-    res.w_vector.resize(cfg.q_max + 1);
-    res.w_vector_error.resize(cfg.q_max + 1);
-    res.integral_signal_excut.resize(cfg.q_max + 1);
-    res.integral_signal_excut_error.resize(cfg.q_max + 1);
-    res.integral_signal.resize(cfg.q_max + 1);
-    res.integral_error.resize(cfg.q_max + 1);
+    res.w_vector.resize(cfg.n_Q2_bins);
+    res.w_vector_error.resize(cfg.n_Q2_bins);
+    res.integral_signal_excut.resize(cfg.n_Q2_bins);
+    res.integral_signal_excut_error.resize(cfg.n_Q2_bins);
+    res.integral_signal.resize(cfg.n_Q2_bins);
+    res.integral_error.resize(cfg.n_Q2_bins);
 
-    for (int q = cfg.q_min; q <= cfg.q_max; ++q)
+    for (int q = 0; q < cfg.n_Q2_bins; ++q)
     {
         double Q2_min_val = cfg.Q2_edges[q];
         double Q2_max_val = cfg.Q2_edges[q + 1];
