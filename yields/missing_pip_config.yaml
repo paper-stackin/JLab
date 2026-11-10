@@ -3,6 +3,7 @@ input: /home/stepan/downloads/missing_pip_clas12.root
 tree_name: MMpiptree
 output: interim/mm_pip_hists_m_pip.root
 hist_name: MM
+topology_name: missing_pip
 
 n_hist_bins: 100
 hist_min: -0.3

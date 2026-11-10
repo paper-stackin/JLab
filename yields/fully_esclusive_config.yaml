@@ -2,6 +2,7 @@ input: /home/stepan/root_progs/2pion/root_trees/nounid.root
 tree_name: MM0tree
 output: interim/mm_pip_hists_m_0.root
 hist_name: MMpiplus_from_MM0_topology
+topology_name: fully_exclusive
 
 n_hist_bins: 100
 hist_min: -0.3

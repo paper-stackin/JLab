@@ -12,6 +12,7 @@ struct YieldsConfig
     std::string tree_name = "MMpiptree";
     std::string output = "mm_pip_hists_m_pip.root";
     std::string hist_name = "MM";
+    std::string topology_name = "missing_pip";
 
     int n_hist_bins = 100;
     double hist_min = -0.3;
@@ -96,6 +97,8 @@ inline YieldsConfig LoadYieldsConfig(const std::string& filename)
         cfg.output = root["output"].as<std::string>();
     if (root["hist_name"])
         cfg.hist_name = root["hist_name"].as<std::string>();
+    if (root["topology_name"])
+        cfg.topology_name = root["topology_name"].as<std::string>();
 
     if (root["n_hist_bins"])
         cfg.n_hist_bins = root["n_hist_bins"].as<int>();

@@ -21,12 +21,12 @@ void yields_pdf()
 
     // Топология 1: Missing Pi+ (Сигнал и фон — одна гистограмма)
     auto missing_pip = ProcessTopology(
-        missing_pip_hist, {}, missing_pip_cfg, "missing_pip"
+        missing_pip_hist, missing_pip_hist, missing_pip_cfg
     );
 
     // Топология 2: Fully exclusive (Сигнал из первой, форма фона из второй)
     auto fully_exclusive = ProcessTopology(
-        missing_pip_hist, fully_exclusive_hist, fully_exclusive_cfg, "fully_exclusive"
+        missing_pip_hist, fully_exclusive_hist, fully_exclusive_cfg
     );
     
     // Графики выходов
