@@ -1,7 +1,7 @@
 void DrawBackgroundExtrapolation(
     const ExtrapolationOutput& extrapolation_output,
-    const YieldsConfig& cfg,
-    const char* topology_name)
+    const YieldsConfig& cfg
+)
 {
     TCanvas* canvas_fit_bg = new TCanvas(
         "canvas_fit_bg",
@@ -10,7 +10,7 @@ void DrawBackgroundExtrapolation(
         720
     );
 
-    TString pdfFileName = TString::Format("results/extrapolating_bg_%s.pdf", topology_name);
+    TString pdfFileName = TString::Format("results/extrapolating_bg_%s.pdf", cfg.topology_name.c_str());
 
     canvas_fit_bg->Print(pdfFileName + "[");
 
@@ -131,7 +131,6 @@ void DrawBackgroundExtrapolation(
 void DrawMissingMassFit(
     const std::vector<std::vector<TH1F*>>& hist,
     const std::vector<std::vector<FitResult>>& fit_results,
-    const char* topology_name,
     const YieldsConfig& cfg
 )
 {
@@ -149,7 +148,7 @@ void DrawMissingMassFit(
             600
         );
         
-        TString pdfFileName = TString::Format("results/%s_fit_in_Q2_bin_%d.pdf", topology_name, q + 1);
+        TString pdfFileName = TString::Format("results/%s_fit_in_Q2_bin_%d.pdf", cfg.topology_name.c_str(), q + 1);
 
         canvas->Print(pdfFileName + "[");
 

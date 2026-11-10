@@ -2,7 +2,7 @@ YieldsOutput CalculateYields(
     const std::vector<std::vector<TH1F*>>& hist_signal,
     const std::vector<std::vector<TH1F*>>& hist_bg,
     const std::vector<std::vector<FitResult>>& fit_results,
-    const std::vector<std::vector<double>>& integral_background, 
+    const ExtrapolationOutput& extrapolation_output, 
     const YieldsConfig& cfg)
 {
     YieldsOutput res;
@@ -136,9 +136,9 @@ YieldsOutput CalculateYields(
             }
             else if (w < cfg.bg_fit_start)
             {
-                // Interpolated background
+                // Extrapolated background
                 N_bg =
-                    integral_background[q][w - w_reper]
+                    extrapolation_output.integral_background[q][w - w_reper]
                     * scale_coef;
             }
             else
